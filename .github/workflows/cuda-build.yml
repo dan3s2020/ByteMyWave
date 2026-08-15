@@ -1,0 +1,39 @@
+name: TensorWave CUDA compile
+
+on:
+  push:
+    branches:
+      - 'bench/**'
+      - 'model/**'
+      - 'quant/**'
+  pull_request:
+
+jobs:
+  cuda-build:
+    runs-on: ubuntu-latest
+    container:
+      image: nvidia/cuda:12.8.1-devel-ubuntu22.04
+
+    steps:
+      - name: Install build prerequisites
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            git \
+            g++ \
+            python3 \
+            python3-pip \
+            ca-certificates
+          python3 -m pip install --no-cache-dir cmake
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: |
+          cmake -S . -B build-ci \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CUDA_ARCHITECTURES=86
+
+      - name: Build all CUDA proof targets
+        run: cmake --build build-ci --parallel 2
