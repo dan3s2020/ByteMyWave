@@ -59,13 +59,33 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $PlanPath = Join-Path $Prepared 'execution-plan.json'
+$SchedulePath = Join-Path $Prepared 'runtime-schedule.json'
 $PackPath = Join-Path $Prepared 'weights.pack'
+
+Write-Host "`n=== Compile deterministic two-slot runtime schedule ===" -ForegroundColor Cyan
+& $Python.Source `
+    (Join-Path $Root 'tools\build_runtime_schedule.py') `
+    --plan $PlanPath `
+    --output $SchedulePath `
+    --slots 2
+if ($LASTEXITCODE -ne 0) {
+    throw "Runtime schedule compilation failed with exit code $LASTEXITCODE"
+}
+
 $Plan = Get-Content -Raw $PlanPath | ConvertFrom-Json
+$Schedule = Get-Content -Raw $SchedulePath | ConvertFrom-Json
 
 $PlanDType = [string]$Plan.geometry.dtype
 $PlanK = [int]$Plan.geometry.k
 $PlanN = [int]$Plan.geometry.n
 $PlanTiles = [int]$Plan.geometry.tile_count
+
+if ([int]$Schedule.tile_count -ne $PlanTiles) {
+    throw 'Runtime schedule tile count does not match execution plan.'
+}
+if ([int]$Schedule.slots -ne 2) {
+    throw 'Phase-2 CUDA proof currently requires exactly two fixed VRAM slots.'
+}
 
 switch ($PlanDType) {
     'F16'  { $CliDType = 'fp16' }
@@ -98,11 +118,13 @@ $Metadata = [ordered]@{
     powershell = $PSVersionTable.PSVersion.ToString()
     model_dir = $ModelDir
     plan = $PlanPath
+    runtime_schedule = $SchedulePath
     pack = $PackPath
     dtype = $PlanDType
     k = $PlanK
     n = $PlanN
     tiles = $PlanTiles
+    slots = 2
     m_sweep = $M
     device = $Device
 }
@@ -113,6 +135,8 @@ Write-Host "Model dir:  $ModelDir"
 Write-Host "DType:      $PlanDType"
 Write-Host "K/N:        $PlanK/$PlanN"
 Write-Host "Tiles:      $PlanTiles"
+Write-Host 'VRAM slots: 2 (fixed addresses)'
+Write-Host 'Tile lookup: precompiled; no runtime search'
 Write-Host "Pack MiB:   $([math]::Round(([double]$Plan.geometry.pack_bytes / 1MB), 2))"
 Write-Host "Results:    $RunDir"
 
@@ -145,5 +169,6 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "`nDONE. Phase-2 results: $RunDir" -ForegroundColor Green
-Write-Host "Summary: $(Join-Path $RunDir 'SUMMARY.md')"
+Write-Host "Schedule: $SchedulePath"
+Write-Host "Summary:  $(Join-Path $RunDir 'SUMMARY.md')"
 Write-Host 'Inspect steady_starvation_pct, hidden transfer, speedup, and correctness for each M.'
