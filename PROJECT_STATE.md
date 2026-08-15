@@ -15,12 +15,14 @@ The project must optimize **unhidden transfer / GPU starvation**, not merely quo
 ```text
 main
   |
-  +-- bench/h2d-overlap-proof-v1        # PR #1, Phase 1
+  +-- bench/h2d-overlap-proof-v1              # PR #1, Phase 1
         |
-        +-- model/real-weight-atlas-proof-v1   # PR #2, Phase 2
+        +-- model/real-weight-atlas-proof-v1  # PR #2, Phase 2
+              |
+              +-- quant/q4-streaming-proof-v1 # PR #4, Phase 3
 ```
 
-Phase 2 intentionally depends on the Phase-1 fixed-VRAM ring. PR #2 therefore targets the Phase-1 branch rather than duplicating the Phase-1 diff against `main`.
+Each PR targets its immediate parent phase so contributors can review one architectural increment at a time.
 
 ## Phase 0 — project definition
 
@@ -44,7 +46,7 @@ Branch: `bench/h2d-overlap-proof-v1`
 
 PR: `#1 Phase 1: fixed-VRAM H2D/compute overlap proof`
 
-Status: **implementation ready; hardware measurement pending**
+Status: **implementation ready; target-hardware measurement pending**
 
 Implements:
 
@@ -74,7 +76,7 @@ Branch: `model/real-weight-atlas-proof-v1`
 
 PR: `#2 Phase 2: real checkpoint Weight Atlas + streaming proof`
 
-Status: **tooling CI passes; CUDA hardware measurement pending**
+Status: **Python tooling CI passes; CUDA compile/hardware gate separate**
 
 Implemented:
 
@@ -91,6 +93,13 @@ Implemented:
   - per-tile provenance + SHA-256;
   - `weights.pack` + `execution-plan.json`.
 
+- `tools/build_runtime_schedule.py`
+  - compiles the ordered execution plan into explicit fixed-slot dependencies;
+  - tile `i` maps to `slot = i % slots`;
+  - slot reuse is guarded by `compute(i-slots):done`;
+  - compute is guarded by `copy(i):done`;
+  - no runtime tensor lookup is required for this static plan.
+
 - `src/tensorwave_real_weight_proof.cu`
   - real checkpoint bytes loaded into pinned host RAM;
   - two fixed VRAM weight buffers;
@@ -100,13 +109,69 @@ Implemented:
   - sequential versus overlapped measurement.
 
 - `scripts/run-real-weight-proof.ps1`
-  - checkpoint directory -> atlas -> plan -> pack -> CUDA build -> M sweep.
+  - checkpoint directory -> atlas -> plan -> static runtime schedule -> pack -> CUDA build -> M sweep -> summary.
 
 - unit tests + GitHub Actions
   - exact safetensors offset test;
   - exact packed-byte equality;
   - per-tile SHA-256 verification;
-  - current Python CI result: passing.
+  - static slot ownership/reuse dependency validation;
+  - Python CI passing on the implemented tool chain.
+
+## Phase 3 — Q4 host store + compressed H2D + GPU dequant
+
+Branch: `quant/q4-streaming-proof-v1`
+
+PR: `#4 Phase 3: Q4 host store + compressed H2D + GPU dequant`
+
+Status: **implemented; Python tests running/passing; CUDA compile and hardware measurement pending**
+
+Current Q4 proof format:
+
+```text
+Q4_SYM_G32_F32S
+32 weights/group
+4-byte float32 scale
+16 packed signed-int4 bytes
+20 bytes/group
+```
+
+Compared with a 16-bit source:
+
+```text
+64 source bytes / 20 Q4 bytes = 3.2x compression
+Q4 physical byte ratio = 31.25%
+effective density = 5 bits/weight including scale
+```
+
+Implemented:
+
+- `tools/quantize_q4_pack.py`
+  - vectorized F16/BF16 source conversion;
+  - symmetric signed int4 quantization;
+  - BF16 decoding without requiring native NumPy bfloat16;
+  - per-tile Q4 SHA-256;
+  - RMS/max reconstruction error + signal RMS + SNR.
+
+- `src/tensorwave_q4_stream_proof.cu`
+  - two fixed compressed-Q4 VRAM slots;
+  - one fixed reusable FP16 dequantized weight tile;
+  - CUDA Q4 dequant kernel;
+  - cuBLAS GEMM with FP32 accumulator;
+  - sequential-Q4 versus overlapped-Q4 correctness;
+  - separate physical H2D, dequant, GEMM and starvation metrics;
+  - source-equivalent feed-rate metric separated from physical PCIe bandwidth.
+
+- `scripts/run-q4-proof.ps1`
+  - real checkpoint -> atlas -> source pack -> static schedule -> Q4 pack -> CUDA build -> M sweep -> summary.
+
+- `tests/test_q4_quantization.py`
+  - signed-int4 nibble encoding;
+  - bounded known-group error;
+  - zero-group handling;
+  - F16/BF16 source decoding.
+
+Phase 3 deliberately dequantizes into one full FP16 tile before cuBLAS. This keeps the proof measurable and debuggable. A later fused kernel should avoid materializing even that full decompressed tile.
 
 ## MiniMax H3 status
 
@@ -120,13 +185,14 @@ See:
 
 Do not introduce hardcoded H3 tensor names or dimensions from secondary claims.
 
-When official weights are available, first action is:
+When official weights are available, first actions are:
 
 ```powershell
 .\scripts\run-real-weight-proof.ps1 -ModelDir "<official H3 checkpoint directory>"
+.\scripts\run-q4-proof.ps1 -ModelDir "<official H3 checkpoint directory>"
 ```
 
-Then archive the generated atlas before writing model-specific graph code.
+Archive the exact atlas/plan before writing H3-specific graph code.
 
 ## Shared interface contracts — DO NOT silently change
 
@@ -179,46 +245,84 @@ nbytes
 sha256
 ```
 
-### VRAM ring v1
+### Runtime Schedule v1
 
-Current weight-residency contract:
+Schema identifier:
 
 ```text
-slot 0 -> tile i
-slot 1 -> tile i+1
-
-before slot reuse:
-copy stream waits for compute-end event of the tile that previously owned the slot
-
-before compute:
-compute stream waits for copy-end event of the tile it will consume
+tensorwave.runtime-schedule.v1
 ```
 
+Current rule:
+
+```text
+slot(i) = i % slots
+copy(i) waits compute(i-slots) before slot reuse
+compute(i) waits copy(i)
+```
+
+This schedule is compiled before the measured loop.
+
+### VRAM ring v1
+
 No per-tile `cudaMalloc/cudaFree` is allowed in the measured loop.
+
+Phase 1/2:
+
+```text
+2 full-precision weight slots
+```
+
+Phase 3:
+
+```text
+2 compressed Q4 slots
+1 reusable full-precision dequant tile
+```
+
+### Q4 Plan v1
+
+Schema identifier:
+
+```text
+tensorwave.q4-plan.v1
+```
+
+Current quantizer name:
+
+```text
+Q4_SYM_G32_F32S
+```
+
+Do not change nibble encoding, group size or scale representation without a new quantizer identifier and ADR update.
 
 ## Facts vs hypotheses
 
 ### Implemented facts
 
-- safetensors headers contain sufficient metadata to locate raw tensor byte ranges;
-- Phase-2 tooling can build an atlas and exact byte pack without numerical deserialization;
-- unit tests verify the offset/packing/hash logic on a controlled safetensors file;
-- the Python tooling CI passes.
+- safetensors headers provide sufficient metadata to locate raw tensor byte ranges;
+- Phase-2 tooling builds an atlas and exact byte pack without numerical deserialization;
+- static two-slot dependencies are materialized and unit-tested before runtime;
+- Q4 v1 mathematically reduces 16-bit weight storage/H2D bytes to 31.25% including its float32 group scales;
+- Q4 encoding/decoding logic has unit tests;
+- Python toolchain tests run in GitHub Actions.
 
-### Pending measurement
+### Pending measurement / compile gates
 
 - target machine H2D bandwidth;
-- compute time for each tested geometry;
 - actual copy/compute concurrency on RTX 3050 Ti;
-- starvation percentage;
-- speedup versus sequential;
-- BF16 cuBLAS behavior on the target driver/toolkit;
-- real checkpoint Phase-2 correctness on target hardware.
+- starvation percentage and speedup;
+- BF16 cuBLAS behavior on target driver/toolkit;
+- CUDA compile result for all proof targets in the current CI container;
+- real checkpoint Phase-2 correctness on target hardware;
+- Q4 CUDA dequant kernel correctness on target hardware;
+- Phase-2 versus Phase-3 wall time/starvation comparison.
 
 ### Later hypotheses
 
 - sub-layer/tensor tiling can keep a 4 GB GPU productive on a model far larger than VRAM;
-- quantized bytes can cross PCIe and be dequantized only at/inside GPU compute;
+- compressed H2D plus GPU dequant materially reduces unhidden transfer;
+- fused dequant-GEMM can remove the full decompressed weight tile from VRAM;
 - H3 graph order can be prefetched deterministically several operations ahead;
 - hot/warm/cold residency can reduce bytes transferred per denoising step;
 - much of H2D latency can be hidden under model compute.
@@ -231,19 +335,23 @@ Get the starvation-versus-M curve on the target RTX 3050 Ti.
 
 ### Gate B — run Phase 2 on any real F16/BF16 safetensors checkpoint
 
-This verifies real-checkpoint bytes before waiting on H3 integration.
+Verify real-checkpoint bytes before H3-specific integration.
 
-### Gate C — official H3 checkpoint
+### Gate C — run Phase 3 on the exact same source tensor family
+
+Compare 16-bit H2D against Q4 H2D + GPU dequant at identical M/K/N/tile count.
+
+### Gate D — official H3 checkpoint
 
 Generate and archive the exact H3 Weight Atlas.
 
-### Gate D — graph-derived plan
+### Gate E — graph-derived plan
 
 Replace storage-order tiles with actual operation dependencies.
 
-### Gate E — quantized streaming
+### Gate F — fused/tiled Q4 execution
 
-Move compressed bytes across PCIe and fuse/defer dequantization on GPU.
+Consume compressed fragments directly into registers/shared memory/matrix multiply so the complete FP16 weight tile is never materialized.
 
 ## Contributor rule
 
