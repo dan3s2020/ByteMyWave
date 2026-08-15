@@ -138,5 +138,12 @@ foreach ($ThisM in $M) {
     }
 }
 
+Write-Host "`n=== Summarizing sweep ===" -ForegroundColor Cyan
+& $Python.Source (Join-Path $Root 'tools\summarize_runs.py') --run-dir $RunDir
+if ($LASTEXITCODE -ne 0) {
+    throw "Result summarization failed with exit code $LASTEXITCODE"
+}
+
 Write-Host "`nDONE. Phase-2 results: $RunDir" -ForegroundColor Green
+Write-Host "Summary: $(Join-Path $RunDir 'SUMMARY.md')"
 Write-Host 'Inspect steady_starvation_pct, hidden transfer, speedup, and correctness for each M.'
