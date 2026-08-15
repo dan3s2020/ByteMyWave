@@ -1,0 +1,39 @@
+{
+  "cluster_id": "three-r920-kimi-k2.5",
+  "model": "k2.5",
+  "hidden_size": 7168,
+  "expert_ff_size": 2048,
+  "routed_experts": 384,
+  "selected_experts": 8,
+  "moe_layers": 60,
+  "q4_bytes_per_weight": 0.625,
+  "nodes": [
+    {
+      "node_id": "r920-head",
+      "host": "10.42.0.10",
+      "port": 29510,
+      "sockets": 4,
+      "role": "head+worker",
+      "gpu": "RTX 3060 12GB"
+    },
+    {
+      "node_id": "r920-worker-1",
+      "host": "10.42.0.11",
+      "port": 29510,
+      "sockets": 4,
+      "role": "worker"
+    },
+    {
+      "node_id": "r920-worker-2",
+      "host": "10.42.0.12",
+      "port": 29510,
+      "sockets": 4,
+      "role": "worker"
+    }
+  ],
+  "transport": {
+    "activation_dtype_bytes": 2,
+    "target_layer_rtt_us": 250,
+    "note": "Replace placeholder addresses with the dedicated cluster fabric addresses on physical hardware."
+  }
+}
