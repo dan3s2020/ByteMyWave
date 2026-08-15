@@ -9,9 +9,14 @@ on:
       - 'quant/**'
   pull_request:
 
+concurrency:
+  group: tensorwave-python-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   safetensors-tools:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,6 +35,7 @@ jobs:
           python -m py_compile tools/pack_stream_tiles.py
           python -m py_compile tools/build_runtime_schedule.py
           python -m py_compile tools/quantize_q4_pack.py
+          python -m py_compile tools/verify_q4_pack.py
           python -m py_compile tools/summarize_runs.py
           python -m py_compile tests/test_safetensors_tools.py
           python -m py_compile tests/test_runtime_schedule.py
