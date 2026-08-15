@@ -25,8 +25,10 @@ jobs:
         run: |
           python -m py_compile tools/safetensors_atlas.py
           python -m py_compile tools/pack_stream_tiles.py
+          python -m py_compile tools/build_runtime_schedule.py
           python -m py_compile tools/summarize_runs.py
           python -m py_compile tests/test_safetensors_tools.py
+          python -m py_compile tests/test_runtime_schedule.py
 
       - name: Unit tests
         run: python -m unittest discover -s tests -p 'test_*.py' -v
