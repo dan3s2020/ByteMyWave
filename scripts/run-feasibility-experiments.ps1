@@ -79,6 +79,17 @@ foreach ($ThisTileN in $TileN) {
     $TileOut = Join-Path $Phase4Dir ("tile-n-$ThisTileN")
     New-Item -ItemType Directory -Force -Path $TileOut | Out-Null
 
+    # Direct map: every point is an observed benchmark result. No TFLOPS/H2D
+    # median is used for these curves.
+    $DirectMeasuredOut = Join-Path $TileOut 'direct-measured-q4'
+    & $Python.Source `
+        (Join-Path $Root 'tools\build_measured_map.py') `
+        --run-dir $Q4Run.FullName `
+        --output-dir $DirectMeasuredOut
+    if ($LASTEXITCODE -ne 0) { throw "Direct measured-map build failed for TileN=$ThisTileN" }
+
+    # Calibration map: use observed physical H2D and effective GEMM to project
+    # the dense operating envelope to larger parameter counts.
     $CalibrationPath = Join-Path $TileOut 'q4-calibration.json'
     & $Python.Source `
         (Join-Path $Root 'tools\calibrate_feasibility_map.py') `
@@ -90,7 +101,7 @@ foreach ($ThisTileN in $TileN) {
     $MeasuredH2D = [double]$Calibration.effective_h2d_gbps_median
     $MeasuredTF = [double]$Calibration.effective_tflops_median
 
-    $MapOut = Join-Path $TileOut 'map-q4-measured'
+    $MapOut = Join-Path $TileOut 'projected-q4-map'
     & $Python.Source `
         (Join-Path $Root 'tools\build_feasibility_map.py') `
         --output-dir $MapOut `
@@ -99,7 +110,7 @@ foreach ($ThisTileN in $TileN) {
         --bytes-per-param 0.625 `
         --models-b '7,13,33,70,120' `
         --m-values '1,4,16,64,128,256,512,1024,2048'
-    if ($LASTEXITCODE -ne 0) { throw "Map build failed for TileN=$ThisTileN" }
+    if ($LASTEXITCODE -ne 0) { throw "Projected map build failed for TileN=$ThisTileN" }
 
     $ManifestRuns += [ordered]@{
         phase = 'Q4'
@@ -107,8 +118,9 @@ foreach ($ThisTileN in $TileN) {
         k = $SelectedK
         source_dtype = $SelectedSourceDType
         run_dir = $Q4Run.FullName
+        direct_measured_map = $DirectMeasuredOut
         calibration = $CalibrationPath
-        map_dir = $MapOut
+        projected_map = $MapOut
     }
 
     if (-not $Skip16BitComparison) {
@@ -132,12 +144,20 @@ foreach ($ThisTileN in $TileN) {
         $Run16 = Get-NewestRun 'phase2-real-*'
         Assert-NewRun $Before16 $Run16 "Phase-2 16-bit TileN=$ThisTileN"
 
+        $Direct16Out = Join-Path $TileOut 'direct-measured-16bit'
+        & $Python.Source `
+            (Join-Path $Root 'tools\build_measured_map.py') `
+            --run-dir $Run16.FullName `
+            --output-dir $Direct16Out
+        if ($LASTEXITCODE -ne 0) { throw "16-bit direct measured-map build failed for TileN=$ThisTileN" }
+
         $ManifestRuns += [ordered]@{
             phase = '16bit'
             tile_n = $ThisTileN
             k = $SelectedK
             source_dtype = $SelectedSourceDType
             run_dir = $Run16.FullName
+            direct_measured_map = $Direct16Out
         }
     }
 }
@@ -170,4 +190,4 @@ Write-Host "Measured aggregation: $(Join-Path $Phase4Dir 'MEASURED-FEASIBILITY.m
 Write-Host "CSV:                  $(Join-Path $Phase4Dir 'feasibility-runs.csv')"
 Write-Host "Manifest:             $(Join-Path $Phase4Dir 'run-manifest.json')"
 Write-Host ''
-Write-Host 'The decisive output is starvation versus M for each TileN, plus Q4-vs-16bit at identical K/N/M.'
+Write-Host 'The decisive output is the direct starvation-vs-M map for each TileN, then Q4-vs-16bit at identical K/N/M.'
