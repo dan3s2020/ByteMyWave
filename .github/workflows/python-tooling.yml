@@ -7,6 +7,7 @@ on:
       - 'model/**'
       - 'bench/**'
       - 'quant/**'
+      - 'research/**'
   pull_request:
 
 concurrency:
@@ -37,9 +38,29 @@ jobs:
           python -m py_compile tools/quantize_q4_pack.py
           python -m py_compile tools/verify_q4_pack.py
           python -m py_compile tools/summarize_runs.py
+          python -m py_compile tools/build_feasibility_map.py
+          python -m py_compile tools/calibrate_feasibility_map.py
+          python -m py_compile tools/build_measured_map.py
+          python -m py_compile tools/aggregate_feasibility_runs.py
           python -m py_compile tests/test_safetensors_tools.py
           python -m py_compile tests/test_runtime_schedule.py
           python -m py_compile tests/test_q4_quantization.py
+          python -m py_compile tests/test_feasibility_map.py
+          python -m py_compile tests/test_feasibility_calibration.py
 
       - name: Unit tests
         run: python -m unittest discover -s tests -p 'test_*.py' -v
+
+      - name: Generate analytical smoke map
+        run: |
+          python tools/build_feasibility_map.py \
+            --output-dir build-map-smoke \
+            --pcie-gbps 12 \
+            --effective-tflops 10 \
+            --bytes-per-param 0.625 \
+            --models-b 7,13,33,70 \
+            --m-values 1,16,64,256,512,1024
+          test -s build-map-smoke/feasibility-map.json
+          test -s build-map-smoke/feasibility-map.csv
+          test -s build-map-smoke/FEASIBILITY-MAP.md
+          test -s build-map-smoke/feasibility-map.svg

@@ -6,6 +6,7 @@ on:
       - 'bench/**'
       - 'model/**'
       - 'quant/**'
+      - 'research/**'
   pull_request:
 
 concurrency:
