@@ -111,16 +111,7 @@ large Q4 host store
     cuBLAS GEMM
 ```
 
-Se măsoară separat:
-
-- compressed physical H2D GB/s;
-- source-equivalent model feed rate;
-- GPU dequant time;
-- GEMM time;
-- starvation;
-- wall time;
-- sequential-Q4 vs overlapped-Q4 full-output correctness;
-- offline Q4 RMS/max weight error și SNR.
+Se măsoară separat compressed physical H2D GB/s, source-equivalent model feed rate, GPU dequant, GEMM, starvation, wall time și correctness.
 
 Run:
 
@@ -130,6 +121,74 @@ python -m pip install numpy
 ```
 
 Protocol complet: [`experiments/phase3-q4-gpu-dequant/README.md`](experiments/phase3-q4-gpu-dequant/README.md).
+
+### Phase 4 — measured feasibility map
+
+Branch: `research/feasibility-map-v1`.
+
+Phase 4 transformă întrebarea „merge?” într-un operating envelope pe:
+
+```text
+M / batch / prefill reuse
+K,N tile geometry
+wire bytes/parameter
+measured H2D GB/s
+measured effective GEMM TFLOP/s
+resident/cache fraction
+active fraction
+```
+
+Ecuația roofline principală:
+
+```text
+M_cross = bytes_per_param * (1-resident_fraction) * effective_FLOPS
+          ---------------------------------------------------------
+                         2 * H2D_bandwidth
+```
+
+Protocol: [`experiments/phase4-feasibility-map/README.md`](experiments/phase4-feasibility-map/README.md).
+
+### Phase 5 — Dell R920 + RTX 3060 hardware simulation
+
+Branch: `hardware/r920-rtx3060-simulation-v1`.
+
+Am mapat arhitectura actuală TensorWave pe un profil concret de hardware ieftin:
+
+```text
+Dell PowerEdge R920
+4 × Xeon E7-4890 v2
+~1 TiB DDR3 ECC balanced
+RTX 3060 12 GB
+```
+
+Hardware analysis: [`docs/10-R920-HARDWARE-PLATFORM.md`](docs/10-R920-HARDWARE-PLATFORM.md).
+
+Simulator reproductibil: [`tools/simulate_r920_tensorwave.py`](tools/simulate_r920_tensorwave.py).
+
+Experiment/protocol: [`experiments/phase5-r920-hardware-simulation/README.md`](experiments/phase5-r920-hardware-simulation/README.md).
+
+Reference result: [`experiments/phase5-r920-hardware-simulation/results/reference/SIMULATION-REPORT.md`](experiments/phase5-r920-hardware-simulation/results/reference/SIMULATION-REPORT.md).
+
+Reference assumptions:
+
+```text
+70B generic dense reference
+Q4 v1 = 0.625 B/param
+12 GB/s effective H2D assumption
+10 TFLOP/s effective dense-linear assumption
+no persistent cache
+```
+
+Reference prediction:
+
+```text
+M_cross ~= 260
+M=1   -> strongly transfer-bound
+M=256 -> near-balanced
+M>=512 -> compute-bound in the idealized model
+```
+
+The current ring is tiny versus 12 GB VRAM for the representative tile geometry, which makes **persistent compressed caching** one of the strongest next optimization targets. These are simulation results, not measured R920 performance.
 
 ## Ce vrem să vedem
 
@@ -141,7 +200,7 @@ steady_starvation_pct <= 10%
 steady_hidden_transfer_pct >= 80%
 ```
 
-Dar nu ne interesează un singur punct norocos. Sweep-ul pe `M` trebuie să arate unde compute-ul începe să acopere transferul și cât de mult mută Q4 pragul față de 16-bit.
+Dar nu ne interesează un singur punct norocos. Sweep-ul pe `M` trebuie să arate unde compute-ul începe să acopere transferul și cât de mult mută Q4/cache pragul față de 16-bit.
 
 ## Structura proiectului
 
@@ -154,8 +213,11 @@ Dar nu ne interesează un singur punct norocos. Sweep-ul pe `M` trebuie să arat
 - [`docs/03-STREAMING-RUNTIME.md`](docs/03-STREAMING-RUNTIME.md) — memory choreography.
 - [`docs/04-COMPRESSION.md`](docs/04-COMPRESSION.md) — compression/dequant strategy.
 - [`docs/05-OPEN-QUESTIONS.md`](docs/05-OPEN-QUESTIONS.md) — ipoteze încă nedemonstrate.
-- [`docs/06-COLLABORATION.md`](docs/06-COLLABORATION.md) — reguli pentru 5 workstreams simultane.
+- [`docs/06-COLLABORATION.md`](docs/06-COLLABORATION.md) — reguli pentru workstreams simultane.
 - [`docs/07-H3-RELEASE-GATE.md`](docs/07-H3-RELEASE-GATE.md) — gate-ul de verificare MiniMax H3.
+- [`docs/08-PRIOR-ART-AND-NOVELTY.md`](docs/08-PRIOR-ART-AND-NOVELTY.md) — prior art/novelty boundary.
+- [`docs/09-WHY-LARGE-LLM-WORKS-OR-FAILS.md`](docs/09-WHY-LARGE-LLM-WORKS-OR-FAILS.md) — dense decode/prefill/batching/MoE feasibility reasoning.
+- [`docs/10-R920-HARDWARE-PLATFORM.md`](docs/10-R920-HARDWARE-PLATFORM.md) — R920/RAM/NUMA/PCIe/RTX3060 hardware profile and limits.
 - [`docs/TRANSCRIPT.md`](docs/TRANSCRIPT.md) — conversația de origine.
 - [`docs/USER-INPUT-VERBATIM.md`](docs/USER-INPUT-VERBATIM.md) — inputul original al utilizatorului.
 
@@ -165,7 +227,9 @@ Dar nu ne interesează un singur punct norocos. Sweep-ul pe `M` trebuie să arat
 - [`tools/pack_stream_tiles.py`](tools/pack_stream_tiles.py)
 - [`tools/build_runtime_schedule.py`](tools/build_runtime_schedule.py)
 - [`tools/quantize_q4_pack.py`](tools/quantize_q4_pack.py)
-- [`tools/summarize_runs.py`](tools/summarize_runs.py)
+- [`tools/build_feasibility_map.py`](tools/build_feasibility_map.py)
+- [`tools/calibrate_feasibility_map.py`](tools/calibrate_feasibility_map.py)
+- [`tools/simulate_r920_tensorwave.py`](tools/simulate_r920_tensorwave.py)
 - [`src/tensorwave_stream_proof.cu`](src/tensorwave_stream_proof.cu)
 - [`src/tensorwave_real_weight_proof.cu`](src/tensorwave_real_weight_proof.cu)
 - [`src/tensorwave_q4_stream_proof.cu`](src/tensorwave_q4_stream_proof.cu)
@@ -175,6 +239,7 @@ Dar nu ne interesează un singur punct norocos. Sweep-ul pe `M` trebuie să arat
 - [`docs/adr/0001-phase1-fixed-vram-ring.md`](docs/adr/0001-phase1-fixed-vram-ring.md)
 - [`docs/adr/0002-real-weight-atlas-pack.md`](docs/adr/0002-real-weight-atlas-pack.md)
 - [`docs/adr/0003-q4-host-representation-gpu-dequant.md`](docs/adr/0003-q4-host-representation-gpu-dequant.md)
+- [`docs/adr/0004-feasibility-map-calibrated-roofline.md`](docs/adr/0004-feasibility-map-calibrated-roofline.md)
 
 ## Principiul care nu trebuie pierdut
 
