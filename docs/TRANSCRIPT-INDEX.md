@@ -9,11 +9,17 @@ TensorWave preserves the discussion that created the project so later contributo
    - preserved as the historical Phase-0 transcript.
 
 2. [`transcript/2026-08-15-continuation.md`](transcript/2026-08-15-continuation.md)
+   - semantic continuation/digest after repository creation;
    - proof-code request;
    - Phase 1/2/3 continuation;
    - prior-art/uniqueness discussion;
    - large-LLM feasibility discussion;
    - request to build the Feasibility Map and experiments.
+
+3. [`transcript/RAW-2026-08-15-after-repo.md`](transcript/RAW-2026-08-15-after-repo.md)
+   - raw visible user/assistant segment for the post-repository project-development discussion;
+   - preserves wording separately from the semantic digest;
+   - tool-call internals are excluded.
 
 ## Preservation rule
 
