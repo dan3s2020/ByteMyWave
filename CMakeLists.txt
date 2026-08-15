@@ -25,13 +25,30 @@ target_link_libraries(tensorwave_stream_proof PRIVATE
     CUDA::cublas
 )
 
+add_executable(tensorwave_real_weight_proof
+    src/tensorwave_real_weight_proof.cu
+)
+
+target_link_libraries(tensorwave_real_weight_proof PRIVATE
+    CUDA::cudart
+    CUDA::cublas
+)
+
 if(MSVC)
     target_compile_options(tensorwave_stream_proof PRIVATE
         $<$<COMPILE_LANGUAGE:CXX>:/W4>
         $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/W4>
     )
+    target_compile_options(tensorwave_real_weight_proof PRIVATE
+        $<$<COMPILE_LANGUAGE:CXX>:/W4>
+        $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/W4>
+    )
 else()
     target_compile_options(tensorwave_stream_proof PRIVATE
+        $<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic>
+        $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-Wall,-Wextra,-Wpedantic>
+    )
+    target_compile_options(tensorwave_real_weight_proof PRIVATE
         $<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic>
         $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-Wall,-Wextra,-Wpedantic>
     )
