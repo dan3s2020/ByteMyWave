@@ -1,0 +1,70 @@
+{
+  "schema": "tensorwave.r920-simulation.v1",
+  "warning": "Analytical/discrete-event simulation, not a hardware benchmark. H2D and compute timing inputs must be replaced by measured Phase-4 calibration.",
+  "hardware": {
+    "server": "Dell PowerEdge R920",
+    "cpu_profile": "4 x Intel Xeon E7-4890 v2",
+    "cpu_cores_total": 60,
+    "cpu_threads_total": 120,
+    "host_ram_gib": 1024.0,
+    "balanced_ram_gib_per_socket": 256.0,
+    "gpu_profile": "GeForce RTX 3060 12GB",
+    "assumed_effective_h2d_gbps_per_gpu": 12.0,
+    "assumed_effective_dense_linear_tflops_per_gpu": 10.0
+  },
+  "workload": {
+    "model": "generic dense 70B reference; not a MiniMax H3 parameter-count claim",
+    "model_billion_params": 70.0,
+    "q4_format": "Q4_SYM_G32_F32S",
+    "q4_bytes_per_parameter": 0.625,
+    "q4_wire_gb": 43.75,
+    "persistent_cache_gib_per_gpu": 0.0,
+    "resident_fraction": 0.0,
+    "k": 8192,
+    "n": 256,
+    "tiles": 32,
+    "dequant_us_per_tile": 0.0
+  },
+  "crossover_m": 260.4166666666667,
+  "roofline": [
+    {"m":1,"stream_gb_per_step":43.75,"transfer_ms":3645.8333333333335,"compute_ms":14.0,"hidden_transfer_pct":0.384,"starvation_pct_lower_bound":99.616,"rows_per_s":0.2742857142857143,"regime":"TRANSFER_BOUND"},
+    {"m":4,"stream_gb_per_step":43.75,"transfer_ms":3645.8333333333335,"compute_ms":56.0,"hidden_transfer_pct":1.536,"starvation_pct_lower_bound":98.464,"rows_per_s":1.0971428571428572,"regime":"TRANSFER_BOUND"},
+    {"m":16,"stream_gb_per_step":43.75,"transfer_ms":3645.8333333333335,"compute_ms":224.0,"hidden_transfer_pct":6.144,"starvation_pct_lower_bound":93.856,"rows_per_s":4.388571428571429,"regime":"TRANSFER_BOUND"},
+    {"m":64,"stream_gb_per_step":43.75,"transfer_ms":3645.8333333333335,"compute_ms":896.0,"hidden_transfer_pct":24.576,"starvation_pct_lower_bound":75.424,"rows_per_s":17.554285714285715,"regime":"TRANSFER_BOUND"},
+    {"m":128,"stream_gb_per_step":43.75,"transfer_ms":3645.8333333333335,"compute_ms":1792.0,"hidden_transfer_pct":49.152,"starvation_pct_lower_bound":50.848,"rows_per_s":35.10857142857143,"regime":"TRANSFER_BOUND"},
+    {"m":256,"stream_gb_per_step":43.75,"transfer_ms":3645.8333333333335,"compute_ms":3584.0,"hidden_transfer_pct":98.304,"starvation_pct_lower_bound":1.696,"rows_per_s":70.21714285714286,"regime":"NEAR_BALANCED"},
+    {"m":512,"stream_gb_per_step":43.75,"transfer_ms":3645.8333333333335,"compute_ms":7168.0,"hidden_transfer_pct":100.0,"starvation_pct_lower_bound":0.0,"rows_per_s":71.42857142857143,"regime":"COMPUTE_BOUND"},
+    {"m":1024,"stream_gb_per_step":43.75,"transfer_ms":3645.8333333333335,"compute_ms":14336.0,"hidden_transfer_pct":100.0,"starvation_pct_lower_bound":0.0,"rows_per_s":71.42857142857143,"regime":"COMPUTE_BOUND"},
+    {"m":2048,"stream_gb_per_step":43.75,"transfer_ms":3645.8333333333335,"compute_ms":28672.0,"hidden_transfer_pct":100.0,"starvation_pct_lower_bound":0.0,"rows_per_s":71.42857142857143,"regime":"COMPUTE_BOUND"}
+  ],
+  "phase3_ring_simulation": [
+    {"m":1,"q4_tile_mib":1.25,"fp16_tile_mib":4.0,"fixed_vram_mib":6.5166015625,"copy_ms_per_tile":0.10922666666666667,"compute_ms_per_tile":0.0004194304,"wall_ms_for_32_tiles":3.4956727637333347,"steady_starvation_pct":99.60366199799768,"hidden_transfer_pct":0.384},
+    {"m":4,"q4_tile_mib":1.25,"fp16_tile_mib":4.0,"fixed_vram_mib":6.56640625,"copy_ms_per_tile":0.10922666666666667,"compute_ms_per_tile":0.0016777216,"wall_ms_for_32_tiles":3.496931054933335,"steady_starvation_pct":98.41523683748954,"hidden_transfer_pct":1.536},
+    {"m":16,"q4_tile_mib":1.25,"fp16_tile_mib":4.0,"fixed_vram_mib":6.765625,"copy_ms_per_tile":0.10922666666666667,"compute_ms_per_tile":0.0067108864,"wall_ms_for_32_tiles":3.5019642197333347,"steady_starvation_pct":93.67035140676028,"hidden_transfer_pct":6.144},
+    {"m":64,"q4_tile_mib":1.25,"fp16_tile_mib":4.0,"fixed_vram_mib":7.5625,"copy_ms_per_tile":0.10922666666666667,"compute_ms_per_tile":0.0268435456,"wall_ms_for_32_tiles":3.5220968789333345,"steady_starvation_pct":74.83076103765761,"hidden_transfer_pct":24.576},
+    {"m":128,"q4_tile_mib":1.25,"fp16_tile_mib":4.0,"fixed_vram_mib":8.625,"copy_ms_per_tile":0.10922666666666667,"compute_ms_per_tile":0.0536870912,"wall_ms_for_32_tiles":3.5489404245333347,"steady_starvation_pct":50.05436384144049,"hidden_transfer_pct":49.152},
+    {"m":256,"q4_tile_mib":1.25,"fp16_tile_mib":4.0,"fixed_vram_mib":10.75,"copy_ms_per_tile":0.10922666666666667,"compute_ms_per_tile":0.1073741824,"wall_ms_for_32_tiles":3.6026275157333347,"steady_starvation_pct":1.6438712517634289,"hidden_transfer_pct":98.304},
+    {"m":512,"q4_tile_mib":1.25,"fp16_tile_mib":4.0,"fixed_vram_mib":15.0,"copy_ms_per_tile":0.10922666666666667,"compute_ms_per_tile":0.2147483648,"wall_ms_for_32_tiles":6.981174340266669,"steady_starvation_pct":0.0,"hidden_transfer_pct":100.0},
+    {"m":1024,"q4_tile_mib":1.25,"fp16_tile_mib":4.0,"fixed_vram_mib":23.5,"copy_ms_per_tile":0.10922666666666667,"compute_ms_per_tile":0.4294967296,"wall_ms_for_32_tiles":13.853122013866672,"steady_starvation_pct":0.0,"hidden_transfer_pct":100.0},
+    {"m":2048,"q4_tile_mib":1.25,"fp16_tile_mib":4.0,"fixed_vram_mib":40.5,"copy_ms_per_tile":0.10922666666666667,"compute_ms_per_tile":0.8589934592,"wall_ms_for_32_tiles":27.597017361066676,"steady_starvation_pct":0.0,"hidden_transfer_pct":100.0}
+  ],
+  "multi_gpu_current_code_compatible_replicated_workers": [
+    {"gpus":1,"m":1,"aggregate_rows_per_s":0.2742857143},{"gpus":1,"m":64,"aggregate_rows_per_s":17.5542857143},{"gpus":1,"m":256,"aggregate_rows_per_s":70.2171428571},{"gpus":1,"m":512,"aggregate_rows_per_s":71.4285714286},
+    {"gpus":2,"m":1,"aggregate_rows_per_s":0.5485714286},{"gpus":2,"m":64,"aggregate_rows_per_s":35.1085714286},{"gpus":2,"m":256,"aggregate_rows_per_s":140.4342857143},{"gpus":2,"m":512,"aggregate_rows_per_s":142.8571428571},
+    {"gpus":3,"m":1,"aggregate_rows_per_s":0.8228571429},{"gpus":3,"m":64,"aggregate_rows_per_s":52.6628571429},{"gpus":3,"m":256,"aggregate_rows_per_s":210.6514285714},{"gpus":3,"m":512,"aggregate_rows_per_s":214.2857142857}
+  ],
+  "cache_sensitivity_example": {
+    "cache_gib": 8.0,
+    "cache_gb_decimal": 8.589934592,
+    "resident_fraction_of_70b_q4": 0.19634136210285714,
+    "stream_gb_per_dense_step": 35.160065408,
+    "crossover_m": 209.28610361904762
+  },
+  "interpretation": [
+    "1 TiB solves model capacity but not dense single-token repeated H2D.",
+    "At the assumed calibration, M=256 is near-balanced and M>=512 is compute-bound.",
+    "The Phase-3 transient ring is tiny relative to 12 GiB; persistent compressed caching is a high-value next experiment.",
+    "Current code scales cleanly as independent NUMA-local GPU workers; equal model sharding is not implemented.",
+    "Physical GPU fit/power/airflow must be validated independently of electrical PCIe link count."
+  ]
+}
