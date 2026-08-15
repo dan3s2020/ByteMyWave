@@ -40,10 +40,12 @@ jobs:
           python -m py_compile tools/summarize_runs.py
           python -m py_compile tools/build_feasibility_map.py
           python -m py_compile tools/calibrate_feasibility_map.py
+          python -m py_compile tools/aggregate_feasibility_runs.py
           python -m py_compile tests/test_safetensors_tools.py
           python -m py_compile tests/test_runtime_schedule.py
           python -m py_compile tests/test_q4_quantization.py
           python -m py_compile tests/test_feasibility_map.py
+          python -m py_compile tests/test_feasibility_calibration.py
 
       - name: Unit tests
         run: python -m unittest discover -s tests -p 'test_*.py' -v
