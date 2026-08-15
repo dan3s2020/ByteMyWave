@@ -34,6 +34,8 @@ main
               +-- quant/q4-streaming-proof-v1 # PR #4 — Phase 3
                     |
                     +-- research/feasibility-map-v1 # Phase 4
+                          |
+                          +-- hardware/r920-rtx3060-simulation-v1 # Phase 5
 ```
 
 Each phase targets its immediate parent so reviewers can isolate one architectural increment.
@@ -242,6 +244,134 @@ Important consequence: total dense model parameter count cancels from the ideal 
 
 ---
 
+## Phase 5 — R920 + RTX 3060 hardware profile and simulation
+
+Branch: `hardware/r920-rtx3060-simulation-v1`
+
+Status: **hardware topology documented + analytical/discrete-event simulator implemented; real R920 measurement still required**
+
+### Hardware profile
+
+Reference target:
+
+```text
+Dell PowerEdge R920
+4 x Intel Xeon E7-4890 v2
+~1 TiB balanced DDR3 ECC
+RTX 3060 12 GB as first GPU candidate
+```
+
+Detailed analysis:
+
+- `docs/10-R920-HARDWARE-PLATFORM.md`
+
+Key hardware conclusion:
+
+```text
+R920 RAM/NUMA/PCIe topology: excellent match for TensorWave experiments
+R920 stock multi-GeForce mechanics/power: not native; validate one card first
+```
+
+The electrical topology exposes multiple CPU-attached x16 links, but this is deliberately not treated as equivalent to an equal number of internal long dual-slot RTX 3060 positions.
+
+### Simulator
+
+- `tools/simulate_r920_tensorwave.py`
+- `tests/test_r920_simulator.py`
+- `experiments/phase5-r920-hardware-simulation/README.md`
+- committed reference result under `experiments/phase5-r920-hardware-simulation/results/reference/`
+
+The simulator follows the existing Phase-3 two-slot schedule:
+
+```text
+slot(i) = i % 2
+copy(i) waits compute(i-2)
+compute(i) waits copy(i)
+```
+
+and the existing Phase-4 crossover model. It does **not** claim to emulate the complete GPU microarchitecture or end-to-end Transformer graph.
+
+### Reference workload
+
+The simulation uses the already-supported generic **70B dense reference point**:
+
+```text
+70B dense
+Q4 v1 = 0.625 B/param
+43.75 GB streamed if resident_fraction=0
+12 GB/s H2D assumption
+10 TFLOP/s effective dense-linear assumption
+K=8192
+N=256
+32 tiles
+M = 1..2048 sweep
+```
+
+This does **not** claim MiniMax H3 is 70B. The H3 release gate remains authoritative.
+
+### Main reference findings
+
+```text
+predicted M_cross ~= 260.4
+M=1:   ~99.6% starvation lower bound
+M=256: ~1.7% starvation lower bound / near-balanced
+M=512: idealized compute-bound
+```
+
+For the current Phase-3 ring at `K=8192,N=256`:
+
+```text
+Q4 tile = 1.25 MiB
+fixed VRAM at M=256 = 10.75 MiB
+fixed VRAM at M=512 = 15.00 MiB
+```
+
+The transient ring is therefore tiny versus 12 GiB VRAM. This exposed a high-priority optimization candidate:
+
+```text
+fixed streaming ring
++
+persistent compressed hot-weight / hot-expert cache
+```
+
+A sensitivity example reserving 8 GiB for compressed cache moves the ideal 70B crossover from roughly:
+
+```text
+M 260 -> M 209
+```
+
+under the same timing assumptions.
+
+### Multi-GPU interpretation
+
+Current-code-compatible scaling:
+
+```text
+one independent TensorWave worker per GPU
+one NUMA-local pinned host queue per GPU
+one copy/compute/ring state per GPU
+```
+
+One-model equal sharding is output only as an optimistic lower bound and is explicitly **not implemented**. Real sharding requires activation placement, synchronization/collectives and topology-aware partitioning.
+
+### Real-hardware gates
+
+Before treating R920 as validated:
+
+```text
+GPU physical fit
+safe auxiliary power path
+thermals
+PCIe negotiated width/generation
+local NUMA pinned H2D
+remote NUMA pinned H2D
+simultaneous H2D + GEMM overlap
+Phase-3 correctness
+measured-vs-predicted M crossover
+```
+
+---
+
 ## Prior art / novelty position
 
 See:
@@ -353,13 +483,21 @@ tensorwave.feasibility-map.v1
 tensorwave.feasibility-calibration.v1
 ```
 
+### R920 Simulation v1
+
+```text
+tensorwave.r920-simulation.v1
+```
+
+This last schema is a simulation/report schema only; it does not replace a runtime interface contract.
+
 No shared schema/packing rule may change silently. Update the identifier/ADR/current-state documentation when a contract changes.
 
 ---
 
-## Immediate hardware command
+## Immediate hardware commands
 
-From `research/feasibility-map-v1`:
+Phase-4 real-checkpoint experiment:
 
 ```powershell
 .\scripts\run-feasibility-experiments.ps1 `
@@ -369,19 +507,25 @@ From `research/feasibility-map-v1`:
   -MaxTiles 32
 ```
 
-Quick smoke version:
+R920 analytical reference simulation:
 
 ```powershell
-.\scripts\run-feasibility-experiments.ps1 `
-  -ModelDir "D:\models\some-safetensors-model" `
-  -TileN @(256) `
-  -M @(1,16,64,256,512) `
-  -MaxTiles 16
+python .\tools\simulate_r920_tensorwave.py `
+  --output-dir .\runs\r920-reference
 ```
 
-The decisive outputs are:
+R920 cache sensitivity example:
+
+```powershell
+python .\tools\simulate_r920_tensorwave.py `
+  --output-dir .\runs\r920-cache8 `
+  --cache-gib-per-gpu 8
+```
+
+The decisive real-hardware outputs remain:
 
 ```text
+local vs remote NUMA H2D
 starvation vs M
 hidden transfer vs M
 Q4 vs 16-bit at same K/N/M
