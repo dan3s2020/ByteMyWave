@@ -1,0 +1,57 @@
+name: phase6-heterogeneous-kimi
+
+on:
+  push:
+    branches:
+      - research/heterogeneous-moe-kimi-v1
+    paths:
+      - 'experiments/phase6-heterogeneous-kimi-runtime/**'
+      - '.github/workflows/phase6-heterogeneous-kimi.yml'
+  pull_request:
+    paths:
+      - 'experiments/phase6-heterogeneous-kimi-runtime/**'
+      - '.github/workflows/phase6-heterogeneous-kimi.yml'
+  workflow_dispatch:
+
+jobs:
+  analytical-and-cpu-bench-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Python unit tests
+        run: python experiments/phase6-heterogeneous-kimi-runtime/test_simulator.py -v
+
+      - name: K2.5 analytical smoke report
+        run: |
+          python experiments/phase6-heterogeneous-kimi-runtime/simulate_heterogeneous_kimi.py \
+            --model k2.5 \
+            --host-ram-gib 1024 \
+            --output-dir /tmp/tw-k25
+          test -s /tmp/tw-k25/simulation.json
+          test -s /tmp/tw-k25/REPORT.md
+
+      - name: K3 analytical smoke report
+        run: |
+          python experiments/phase6-heterogeneous-kimi-runtime/simulate_heterogeneous_kimi.py \
+            --model k3 \
+            --host-ram-gib 2048 \
+            --output-dir /tmp/tw-k3
+          test -s /tmp/tw-k3/simulation.json
+          test -s /tmp/tw-k3/REPORT.md
+
+      - name: Build AVX-only K2.5 CPU expert benchmark
+        run: |
+          g++ -O3 -std=c++17 -mavx -fopenmp \
+            experiments/phase6-heterogeneous-kimi-runtime/bench_cpu_expert_q4.cpp \
+            -o /tmp/bench_cpu_expert_q4
+
+      - name: Smoke-run CPU expert benchmark
+        run: |
+          grep -qw avx /proc/cpuinfo
+          OMP_NUM_THREADS=2 /tmp/bench_cpu_expert_q4 \
+            --threads 2 --sockets 4 --warmup 1 --iters 1
