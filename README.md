@@ -1,111 +1,204 @@
 # TensorWave
 
-TensorWave este proiectul pentru investigarea unei arhitecturi de inferență în care **un model AI mult mai mare decât VRAM-ul disponibil este păstrat în RAM**, iar un GPU cu VRAM mic (ținta inițială: ~4 GB) este folosit ca **accelerator de calcul + fereastră/cache de lucru**, nu ca depozit complet al modelului.
+TensorWave investighează o arhitectură de inferență în care **modelul poate fi mult mai mare decât VRAM-ul disponibil**: modelul stă în RAM într-o reprezentare compactă, iar GPU-ul cu VRAM mic este tratat ca **accelerator + fereastră/cache de lucru**, nu ca depozit complet al modelului.
 
-## Ideea centrală
+## Ținta
 
-Ținta proiectului este să verificăm dacă putem face util un sistem cu:
+Sistemul urmărit:
 
-- mult RAM ieftin (inclusiv RAM vechi/server, dacă este suficient pentru alimentarea pipeline-ului);
-- GPU NVIDIA cu VRAM mic, inclusiv 4 GB;
-- model mare ținut în RAM în formă compactă/quantizată;
-- transfer predictibil RAM → VRAM pe bucăți mici;
-- prefetch al următoarei bucăți în timp ce GPU-ul calculează bucata curentă;
-- sloturi VRAM fixe, fără allocate/free continuu;
-- dequantizare/decompresie pe GPU, cât mai aproape de operația matematică;
-- un atlas/graf al tensorilor și tile-urilor pentru adresare, dependențe, integritate și eventual reconstrucție;
-- metrica principală: **GPU starvation time**, nu simplul timp brut de copiere prin PCIe.
+- mult RAM ieftin, inclusiv RAM server vechi dacă măsurătorile îl permit;
+- GPU NVIDIA cu VRAM mic, ținta inițială fiind ~4 GB;
+- model/index/execuție cunoscute înainte de runtime;
+- tile-uri deterministic adresabile;
+- fixed VRAM slots, fără `cudaMalloc/cudaFree` per tile;
+- `copy(N+1)` în paralel cu `compute(N)`;
+- modelul păstrat quantizat în RAM când este avantajos;
+- transferul prin PCIe făcut în forma comprimată;
+- dequantizarea cât mai târziu posibil, ideal în GPU chiar lângă operația matematică;
+- măsurăm **GPU starvation / unhidden transfer**, nu confundăm bandwidth-ul brut cu costul efectiv.
 
-Modelul principal de interes discutat până acum este **MiniMax H3**, dar arhitectura este intenționat generică pentru Transformer/diffusion/LLM.
+Modelul final de interes este MiniMax H3, dar infrastructura este intenționat generică pentru Transformer/diffusion/LLM. Detaliile H3 sunt acceptate ca fapte numai când provin din checkpoint/config/implementare oficială; vezi [`docs/07-H3-RELEASE-GATE.md`](docs/07-H3-RELEASE-GATE.md).
 
 ## Stadiul actual
 
-**Faza 2 — real checkpoint bytes + Weight Atlas + fixed-VRAM streaming.**
+### Phase 1 — synthetic H2D/compute overlap
 
-Faza 1 izolează ipoteza fundamentală folosind weights sintetice:
+Branch: `bench/h2d-overlap-proof-v1` — draft PR #1.
 
-> în timp ce GPU-ul calculează tile-ul `N`, poate transferul RAM → VRAM al tile-ului `N+1` să fie ascuns suficient încât GPU-ul să nu rămână flămând după date?
+Demonstrează mecanismul minim:
 
-Faza 2 păstrează același contract CUDA, dar scoate weights sintetice din ecuație. Tooling-ul actual:
+```text
+pinned RAM
+  -> fixed VRAM slot A/B
+  -> real FP16 cuBLAS GEMM
+```
 
-1. citește headerele shard-urilor `safetensors` fără să materializeze tensorii;
-2. construiește `weight-atlas.json` cu nume, shape, dtype și byte offsets exacte;
-3. selectează determinist tensori reali rank-2 cu același dtype și `K`;
-4. copiază direct row-slices din checkpoint într-un `weights.pack` fără conversie numerică;
-5. generează `execution-plan.json` cu proveniență și SHA-256 pentru fiecare tile;
-6. încarcă pack-ul în pinned RAM;
-7. rulează exact bytes checkpoint-ului prin două sloturi VRAM fixe și cuBLAS GEMM;
-8. compară baseline-ul secvențial cu pipeline-ul overlapped folosind un accumulator FP32 la care contribuie fiecare tile.
+Baseline-ul secvențial și pipeline-ul overlapped execută aceeași ordine și se compară matematic. Sunt măsurate H2D, compute, wall time, starvation și hidden-transfer estimate.
 
-Experimentul este documentat în [`experiments/phase2-real-weight-streaming/README.md`](experiments/phase2-real-weight-streaming/README.md).
+Run:
 
-Pe Windows:
+```powershell
+.\scripts\run-proof.ps1
+```
+
+### Phase 2 — real checkpoint bytes + Weight Atlas
+
+Branch: `model/real-weight-atlas-proof-v1` — draft PR #2.
+
+Înlocuiește weights sintetice cu bytes reali din `safetensors`:
+
+```text
+safetensors headers
+ -> weight-atlas.json
+ -> exact row tiles
+ -> execution-plan.json
+ -> runtime-schedule.json
+ -> weights.pack
+ -> pinned RAM
+ -> two fixed VRAM slots
+ -> F16/BF16 cuBLAS GEMM
+```
+
+Nu se deserializează numeric tensorii pentru atlas/pack. Fiecare tile are proveniență, offsets și SHA-256. Static scheduler-ul materializează dinainte slot assignment + wait dependencies, deci measured loop nu caută „ce tensor urmează”.
+
+Run:
 
 ```powershell
 .\scripts\run-real-weight-proof.ps1 -ModelDir "D:\models\some-safetensors-model"
 ```
 
-Scriptul construiește automat atlasul + pack-ul, citește geometria selectată și face sweep pe mai multe valori `M`.
+CUDA compile CI pentru Phase 2 este verde; target-hardware timing rămâne gate separat.
 
-### MiniMax H3
+### Phase 3 — Q4 în RAM, Q4 prin PCIe, dequant pe GPU
 
-H3 există oficial, dar TensorWave nu hardcodează încă dimensiuni interne neverificate. Statusul checkpoint-ului și regula de verificare sunt documentate în [`docs/07-H3-RELEASE-GATE.md`](docs/07-H3-RELEASE-GATE.md). Când checkpoint-ul oficial devine disponibil, Faza 2 trebuie să poată porni doar indicând folderul lui local.
+Branch: `quant/q4-streaming-proof-v1` — draft PR #4.
+
+Aici atacăm direct cantitatea de date transferată.
+
+Formatul proof curent:
+
+```text
+Q4_SYM_G32_F32S
+32 weights/group
+4-byte float32 scale
+16 packed signed-int4 bytes
+20 bytes/group
+```
+
+Față de F16/BF16:
+
+```text
+64 bytes -> 20 bytes
+31.25% din bytes
+3.2x compresie
+5 effective bits/weight incluzând scale-ul
+```
+
+Pipeline:
+
+```text
+large Q4 host store
+        |
+        | compressed cudaMemcpyAsync
+        v
+ Q4 slot A / Q4 slot B
+        |
+        | custom CUDA dequant
+        v
+ one reusable FP16 tile
+        |
+        v
+    cuBLAS GEMM
+```
+
+Se măsoară separat:
+
+- compressed physical H2D GB/s;
+- source-equivalent model feed rate;
+- GPU dequant time;
+- GEMM time;
+- starvation;
+- wall time;
+- sequential-Q4 vs overlapped-Q4 full-output correctness;
+- offline Q4 RMS/max weight error și SNR.
+
+Run:
+
+```powershell
+python -m pip install numpy
+.\scripts\run-q4-proof.ps1 -ModelDir "D:\models\some-safetensors-model"
+```
+
+Protocol complet: [`experiments/phase3-q4-gpu-dequant/README.md`](experiments/phase3-q4-gpu-dequant/README.md).
+
+## Ce vrem să vedem
+
+Strong support pentru un shape rămâne:
+
+```text
+correctness_ok = true
+steady_starvation_pct <= 10%
+steady_hidden_transfer_pct >= 80%
+```
+
+Dar nu ne interesează un singur punct norocos. Sweep-ul pe `M` trebuie să arate unde compute-ul începe să acopere transferul și cât de mult mută Q4 pragul față de 16-bit.
 
 ## Structura proiectului
 
-### Documentație de bază
+### Source of truth
 
-- [`docs/00-PROJECT-INTENT.md`](docs/00-PROJECT-INTENT.md) — scop, constrângeri și ipoteze.
-- [`docs/01-MODEL-MEMORY.md`](docs/01-MODEL-MEMORY.md) — ce există efectiv în memoria modelului.
-- [`docs/02-WEIGHT-ATLAS.md`](docs/02-WEIGHT-ATLAS.md) — reprezentarea modelului ca hartă/graf/tile-uri.
-- [`docs/03-STREAMING-RUNTIME.md`](docs/03-STREAMING-RUNTIME.md) — cum ar trebui alimentat GPU-ul din RAM.
-- [`docs/04-COMPRESSION.md`](docs/04-COMPRESSION.md) — unde se face quantizarea/decompresia și de ce.
-- [`docs/05-OPEN-QUESTIONS.md`](docs/05-OPEN-QUESTIONS.md) — lucrurile care trebuie demonstrate experimental.
-- [`docs/06-COLLABORATION.md`](docs/06-COLLABORATION.md) — organizarea pentru 5 persoane care lucrează simultan.
-- [`docs/07-H3-RELEASE-GATE.md`](docs/07-H3-RELEASE-GATE.md) — ce este și ce nu este verificat despre checkpoint-ul H3.
-- [`docs/TRANSCRIPT.md`](docs/TRANSCRIPT.md) — copia conversației relevante care a dus la proiect.
-- [`docs/USER-INPUT-VERBATIM.md`](docs/USER-INPUT-VERBATIM.md) — mesajele utilizatorului care au definit proiectul, păstrate fără reformulare.
+- [`PROJECT_STATE.md`](PROJECT_STATE.md) — starea curentă, branch chain, facts vs hypotheses, next gates.
+- [`docs/00-PROJECT-INTENT.md`](docs/00-PROJECT-INTENT.md) — scop și constrângeri.
+- [`docs/01-MODEL-MEMORY.md`](docs/01-MODEL-MEMORY.md) — ce reprezintă weights/activations/workspace.
+- [`docs/02-WEIGHT-ATLAS.md`](docs/02-WEIGHT-ATLAS.md) — modelul de adresare/tile map.
+- [`docs/03-STREAMING-RUNTIME.md`](docs/03-STREAMING-RUNTIME.md) — memory choreography.
+- [`docs/04-COMPRESSION.md`](docs/04-COMPRESSION.md) — compression/dequant strategy.
+- [`docs/05-OPEN-QUESTIONS.md`](docs/05-OPEN-QUESTIONS.md) — ipoteze încă nedemonstrate.
+- [`docs/06-COLLABORATION.md`](docs/06-COLLABORATION.md) — reguli pentru 5 workstreams simultane.
+- [`docs/07-H3-RELEASE-GATE.md`](docs/07-H3-RELEASE-GATE.md) — gate-ul de verificare MiniMax H3.
+- [`docs/TRANSCRIPT.md`](docs/TRANSCRIPT.md) — conversația de origine.
+- [`docs/USER-INPUT-VERBATIM.md`](docs/USER-INPUT-VERBATIM.md) — inputul original al utilizatorului.
 
-### Implementare experimentală
+### Tooling / runtime
 
-**Phase 1**
+- [`tools/safetensors_atlas.py`](tools/safetensors_atlas.py)
+- [`tools/pack_stream_tiles.py`](tools/pack_stream_tiles.py)
+- [`tools/build_runtime_schedule.py`](tools/build_runtime_schedule.py)
+- [`tools/quantize_q4_pack.py`](tools/quantize_q4_pack.py)
+- [`tools/summarize_runs.py`](tools/summarize_runs.py)
+- [`src/tensorwave_stream_proof.cu`](src/tensorwave_stream_proof.cu)
+- [`src/tensorwave_real_weight_proof.cu`](src/tensorwave_real_weight_proof.cu)
+- [`src/tensorwave_q4_stream_proof.cu`](src/tensorwave_q4_stream_proof.cu)
 
-- [`src/tensorwave_stream_proof.cu`](src/tensorwave_stream_proof.cu) — benchmark CUDA/cuBLAS cu weights sintetice în pinned RAM.
-- [`scripts/run-proof.ps1`](scripts/run-proof.ps1) — build + sweep Phase 1 pe Windows.
-- [`experiments/phase1-h2d-overlap/`](experiments/phase1-h2d-overlap/) — protocol și criterii Phase 1.
-- [`docs/adr/0001-phase1-fixed-vram-ring.md`](docs/adr/0001-phase1-fixed-vram-ring.md) — fixed two-slot VRAM ring.
+### ADRs
 
-**Phase 2**
-
-- [`tools/safetensors_atlas.py`](tools/safetensors_atlas.py) — parser header-only pentru Weight Atlas.
-- [`tools/pack_stream_tiles.py`](tools/pack_stream_tiles.py) — exact-byte tile packer + execution plan + SHA-256.
-- [`src/tensorwave_real_weight_proof.cu`](src/tensorwave_real_weight_proof.cu) — streaming CUDA/cuBLAS pentru weights F16/BF16 reale.
-- [`scripts/run-real-weight-proof.ps1`](scripts/run-real-weight-proof.ps1) — pipeline complet checkpoint → atlas → pack → benchmark.
-- [`experiments/phase2-real-weight-streaming/`](experiments/phase2-real-weight-streaming/) — protocolul Phase 2.
-- [`tests/test_safetensors_tools.py`](tests/test_safetensors_tools.py) — test exact pentru offsets, pack bytes și SHA-256.
+- [`docs/adr/0001-phase1-fixed-vram-ring.md`](docs/adr/0001-phase1-fixed-vram-ring.md)
+- [`docs/adr/0002-real-weight-atlas-pack.md`](docs/adr/0002-real-weight-atlas-pack.md)
+- [`docs/adr/0003-q4-host-representation-gpu-dequant.md`](docs/adr/0003-q4-host-representation-gpu-dequant.md)
 
 ## Principiul care nu trebuie pierdut
 
-TensorWave nu încearcă să pretindă că 4 GB VRAM „devin” fizic 24/64/128 GB VRAM.
+TensorWave nu afirmă că 4 GB VRAM devin fizic 24/64/128 GB.
 
-În schimb, încearcă să facă astfel încât **GPU-ul să nu aibă nevoie să vadă simultan decât fereastra activă de date necesară operației curente**, iar restul modelului să fie ținut în RAM și pregătit din timp.
+Ținta este mai puternică și mai precisă:
 
-Schema conceptuală:
+> GPU-ul trebuie să vadă numai working set-ul necesar calculului curent, iar scheduler-ul trebuie să se asigure că următorul working set este deja disponibil când GPU-ul îl cere.
+
+Long-term path:
 
 ```text
-Large RAM model store
+large compressed RAM model
         |
-        | preplanned / indexed / compressed tiles
+        | static graph-derived schedule
         v
-Pinned host window / DMA queue
+compressed H2D ring
         |
-        | PCIe async transfer
+        | dequant fragments only when needed
         v
-Small fixed VRAM ring/cache
+register/shared-memory tiles
         |
-        | dequantize + compute
         v
-GPU kernels / Tensor Cores
+Tensor Core MMA
 ```
 
-Obiectivul experimental este să aflăm dacă transferul poate fi ascuns suficient de mult sub compute încât sistemul să rămână productiv chiar cu VRAM foarte mic.
+Dacă ajungem acolo, VRAM-ul nu mai este „mărimea modelului”; este dimensiunea ferestrei active de calcul.

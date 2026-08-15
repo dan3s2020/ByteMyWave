@@ -8,9 +8,14 @@ on:
       - 'quant/**'
   pull_request:
 
+concurrency:
+  group: tensorwave-cuda-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   cuda-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     container:
       image: nvidia/cuda:12.8.1-devel-ubuntu22.04
 

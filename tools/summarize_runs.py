@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize TensorWave Phase-1/Phase-2 JSON sweeps into Markdown + CSV."""
+"""Summarize TensorWave Phase-1/2/3 JSON sweeps into Markdown + CSV."""
 
 from __future__ import annotations
 
@@ -31,19 +31,31 @@ def load_rows(run_dir: Path) -> list[dict[str, Any]]:
         correctness = bool(data.get("correctness_ok", False))
         supported = correctness and starvation <= 10.0 and hidden >= 80.0
 
+        compressed_h2d = float(
+            overlapped.get("compressed_h2d_gbps", overlapped.get("h2d_gbps", 0.0))
+        )
+        source_equivalent_h2d = float(
+            overlapped.get("source_equivalent_h2d_gbps", compressed_h2d)
+        )
+        quantization = str(data.get("quantization", ""))
+        dtype = str(data.get("dtype", quantization or "FP16-synthetic"))
+
         rows.append(
             {
                 "file": path.name,
                 "experiment": data.get("experiment", "unknown"),
-                "dtype": data.get("dtype", "FP16-synthetic"),
+                "dtype_or_quant": dtype,
                 "m": int(geometry.get("m", 0)),
                 "k": int(geometry.get("k", 0)),
                 "n": int(geometry.get("n", 0)),
                 "tiles": int(geometry.get("tiles", geometry.get("tile_count", 0))),
                 "seq_wall_ms": float(sequential.get("wall_ms", 0.0)),
                 "ovl_wall_ms": float(overlapped.get("wall_ms", 0.0)),
-                "h2d_gbps": float(overlapped.get("h2d_gbps", 0.0)),
+                "h2d_gbps": compressed_h2d,
+                "source_equiv_h2d_gbps": source_equivalent_h2d,
                 "compute_ms": float(overlapped.get("compute_ms", 0.0)),
+                "dequant_ms": float(overlapped.get("dequant_ms", 0.0)),
+                "gemm_ms": float(overlapped.get("gemm_ms", 0.0)),
                 "starvation_ms": float(overlapped.get("starvation_ms", 0.0)),
                 "starvation_pct": starvation,
                 "hidden_pct": hidden,
@@ -74,6 +86,7 @@ def write_markdown(path: Path, rows: list[dict[str, Any]]) -> None:
     correct_rows = [row for row in rows if row["correctness"]]
     best = min(correct_rows, key=lambda r: r["starvation_pct"]) if correct_rows else None
     supported = [row for row in rows if row["supported"]]
+    has_q4 = any(row["dequant_ms"] > 0.0 for row in rows)
 
     lines = [
         "# TensorWave benchmark summary",
@@ -90,9 +103,11 @@ def write_markdown(path: Path, rows: list[dict[str, Any]]) -> None:
                 "## Lowest measured starvation among correct shapes",
                 "",
                 f"- M/K/N: `{best['m']}/{best['k']}/{best['n']}`",
+                f"- representation: `{best['dtype_or_quant']}`",
                 f"- starvation: **{fmt(best['starvation_pct'])}%**",
                 f"- hidden transfer estimate: **{fmt(best['hidden_pct'])}%**",
-                f"- H2D: **{fmt(best['h2d_gbps'])} GB/s**",
+                f"- physical H2D: **{fmt(best['h2d_gbps'])} GB/s**",
+                f"- source-equivalent feed: **{fmt(best['source_equiv_h2d_gbps'])} GB/s**",
                 f"- speedup: **{fmt(best['speedup'])}x**",
                 f"- verdict: `{best['verdict']}`",
                 "",
@@ -103,19 +118,22 @@ def write_markdown(path: Path, rows: list[dict[str, Any]]) -> None:
         [
             "## Sweep",
             "",
-            "| M | K | N | tiles | dtype | H2D GB/s | starvation % | hidden % | speedup | correct | strong |",
-            "|---:|---:|---:|---:|:---|---:|---:|---:|---:|:---:|:---:|",
+            "| M | K | N | tiles | representation | physical H2D GB/s | source-equiv GB/s | dequant ms | GEMM ms | starvation % | hidden % | speedup | correct | strong |",
+            "|---:|---:|---:|---:|:---|---:|---:|---:|---:|---:|---:|---:|:---:|:---:|",
         ]
     )
     for row in rows:
         lines.append(
-            "| {m} | {k} | {n} | {tiles} | {dtype} | {h2d} | {starve} | {hidden} | {speedup} | {correct} | {strong} |".format(
+            "| {m} | {k} | {n} | {tiles} | {repr} | {h2d} | {source} | {dequant} | {gemm} | {starve} | {hidden} | {speedup} | {correct} | {strong} |".format(
                 m=row["m"],
                 k=row["k"],
                 n=row["n"],
                 tiles=row["tiles"],
-                dtype=row["dtype"],
+                repr=row["dtype_or_quant"],
                 h2d=fmt(row["h2d_gbps"]),
+                source=fmt(row["source_equiv_h2d_gbps"]),
+                dequant=fmt(row["dequant_ms"]),
+                gemm=fmt(row["gemm_ms"]),
                 starve=fmt(row["starvation_pct"]),
                 hidden=fmt(row["hidden_pct"]),
                 speedup=fmt(row["speedup"]),
@@ -128,9 +146,17 @@ def write_markdown(path: Path, rows: list[dict[str, Any]]) -> None:
         [
             "",
             "Strong support is defined as correctness passing, steady starvation <= 10%, and hidden transfer estimate >= 80%.",
-            "",
         ]
     )
+    if has_q4:
+        lines.extend(
+            [
+                "",
+                "For Q4, `physical H2D` is the compressed byte rate. `source-equiv` expresses how many original 16-bit weight bytes those compressed bytes represent per second; it is not physical PCIe bandwidth.",
+            ]
+        )
+    lines.append("")
+
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8")
 
