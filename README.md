@@ -16,36 +16,40 @@ TensorWave este proiectul pentru investigarea unei arhitecturi de inferență î
 - un atlas/graf al tensorilor și tile-urilor pentru adresare, dependențe, integritate și eventual reconstrucție;
 - metrica principală: **GPU starvation time**, nu simplul timp brut de copiere prin PCIe.
 
-Modelul principal de interes discutat până acum este **MiniMax H3**, dar arhitectura trebuie gândită generic, astfel încât aceeași idee să poată fi verificată și pe alte modele Transformer/diffusion/LLM.
+Modelul principal de interes discutat până acum este **MiniMax H3**, dar arhitectura este intenționat generică pentru Transformer/diffusion/LLM.
 
 ## Stadiul actual
 
-**Faza 1 — proof experimental pentru transfer/compute overlap.**
+**Faza 2 — real checkpoint bytes + Weight Atlas + fixed-VRAM streaming.**
 
-Faza 0 de documentare este încheiată. Prima implementare nu încearcă încă să ruleze MiniMax H3. Mai întâi testează separat ipoteza fundamentală:
+Faza 1 izolează ipoteza fundamentală folosind weights sintetice:
 
 > în timp ce GPU-ul calculează tile-ul `N`, poate transferul RAM → VRAM al tile-ului `N+1` să fie ascuns suficient încât GPU-ul să nu rămână flămând după date?
 
-Proof-ul actual folosește:
+Faza 2 păstrează același contract CUDA, dar scoate weights sintetice din ecuație. Tooling-ul actual:
 
-- weights FP16 rezidente în pinned RAM;
-- GEMM real prin cuBLAS;
-- două sloturi VRAM fixe;
-- stream CUDA separat pentru H2D și compute;
-- CUDA events pentru dependențe;
-- baseline secvențial versus pipeline overlapped;
-- măsurare explicită a `GPU starvation`;
-- verificarea numerică a rezultatului pipeline-ului față de baseline.
+1. citește headerele shard-urilor `safetensors` fără să materializeze tensorii;
+2. construiește `weight-atlas.json` cu nume, shape, dtype și byte offsets exacte;
+3. selectează determinist tensori reali rank-2 cu același dtype și `K`;
+4. copiază direct row-slices din checkpoint într-un `weights.pack` fără conversie numerică;
+5. generează `execution-plan.json` cu proveniență și SHA-256 pentru fiecare tile;
+6. încarcă pack-ul în pinned RAM;
+7. rulează exact bytes checkpoint-ului prin două sloturi VRAM fixe și cuBLAS GEMM;
+8. compară baseline-ul secvențial cu pipeline-ul overlapped folosind un accumulator FP32 la care contribuie fiecare tile.
 
-Experimentul este documentat în [`experiments/phase1-h2d-overlap/README.md`](experiments/phase1-h2d-overlap/README.md).
+Experimentul este documentat în [`experiments/phase2-real-weight-streaming/README.md`](experiments/phase2-real-weight-streaming/README.md).
 
-Pe Windows, după instalarea CUDA Toolkit + CMake + Visual Studio C++ tools:
+Pe Windows:
 
 ```powershell
-.\scripts\run-proof.ps1
+.\scripts\run-real-weight-proof.ps1 -ModelDir "D:\models\some-safetensors-model"
 ```
 
-Scriptul face implicit un sweep pe mai multe valori `M` pentru a găsi punctul în care compute-ul devine suficient de lung încât transferul următorului tile să fie ascuns.
+Scriptul construiește automat atlasul + pack-ul, citește geometria selectată și face sweep pe mai multe valori `M`.
+
+### MiniMax H3
+
+H3 există oficial, dar TensorWave nu hardcodează încă dimensiuni interne neverificate. Statusul checkpoint-ului și regula de verificare sunt documentate în [`docs/07-H3-RELEASE-GATE.md`](docs/07-H3-RELEASE-GATE.md). Când checkpoint-ul oficial devine disponibil, Faza 2 trebuie să poată porni doar indicând folderul lui local.
 
 ## Structura proiectului
 
@@ -58,15 +62,27 @@ Scriptul face implicit un sweep pe mai multe valori `M` pentru a găsi punctul �
 - [`docs/04-COMPRESSION.md`](docs/04-COMPRESSION.md) — unde se face quantizarea/decompresia și de ce.
 - [`docs/05-OPEN-QUESTIONS.md`](docs/05-OPEN-QUESTIONS.md) — lucrurile care trebuie demonstrate experimental.
 - [`docs/06-COLLABORATION.md`](docs/06-COLLABORATION.md) — organizarea pentru 5 persoane care lucrează simultan.
+- [`docs/07-H3-RELEASE-GATE.md`](docs/07-H3-RELEASE-GATE.md) — ce este și ce nu este verificat despre checkpoint-ul H3.
 - [`docs/TRANSCRIPT.md`](docs/TRANSCRIPT.md) — copia conversației relevante care a dus la proiect.
 - [`docs/USER-INPUT-VERBATIM.md`](docs/USER-INPUT-VERBATIM.md) — mesajele utilizatorului care au definit proiectul, păstrate fără reformulare.
 
 ### Implementare experimentală
 
-- [`src/tensorwave_stream_proof.cu`](src/tensorwave_stream_proof.cu) — benchmark CUDA/cuBLAS pentru pipeline-ul fixed-VRAM.
-- [`scripts/run-proof.ps1`](scripts/run-proof.ps1) — build + sweep automat pe Windows.
-- [`experiments/phase1-h2d-overlap/`](experiments/phase1-h2d-overlap/) — protocolul experimentului și criteriile de succes/eșec.
-- [`docs/adr/0001-phase1-fixed-vram-ring.md`](docs/adr/0001-phase1-fixed-vram-ring.md) — decizia arhitecturală pentru primul proof.
+**Phase 1**
+
+- [`src/tensorwave_stream_proof.cu`](src/tensorwave_stream_proof.cu) — benchmark CUDA/cuBLAS cu weights sintetice în pinned RAM.
+- [`scripts/run-proof.ps1`](scripts/run-proof.ps1) — build + sweep Phase 1 pe Windows.
+- [`experiments/phase1-h2d-overlap/`](experiments/phase1-h2d-overlap/) — protocol și criterii Phase 1.
+- [`docs/adr/0001-phase1-fixed-vram-ring.md`](docs/adr/0001-phase1-fixed-vram-ring.md) — fixed two-slot VRAM ring.
+
+**Phase 2**
+
+- [`tools/safetensors_atlas.py`](tools/safetensors_atlas.py) — parser header-only pentru Weight Atlas.
+- [`tools/pack_stream_tiles.py`](tools/pack_stream_tiles.py) — exact-byte tile packer + execution plan + SHA-256.
+- [`src/tensorwave_real_weight_proof.cu`](src/tensorwave_real_weight_proof.cu) — streaming CUDA/cuBLAS pentru weights F16/BF16 reale.
+- [`scripts/run-real-weight-proof.ps1`](scripts/run-real-weight-proof.ps1) — pipeline complet checkpoint → atlas → pack → benchmark.
+- [`experiments/phase2-real-weight-streaming/`](experiments/phase2-real-weight-streaming/) — protocolul Phase 2.
+- [`tests/test_safetensors_tools.py`](tests/test_safetensors_tools.py) — test exact pentru offsets, pack bytes și SHA-256.
 
 ## Principiul care nu trebuie pierdut
 
