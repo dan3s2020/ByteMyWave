@@ -6,6 +6,7 @@ on:
       - main
       - 'model/**'
       - 'bench/**'
+      - 'quant/**'
   pull_request:
 
 jobs:
@@ -24,6 +25,7 @@ jobs:
         run: |
           python -m py_compile tools/safetensors_atlas.py
           python -m py_compile tools/pack_stream_tiles.py
+          python -m py_compile tools/summarize_runs.py
           python -m py_compile tests/test_safetensors_tools.py
 
       - name: Unit tests
