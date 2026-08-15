@@ -8,6 +8,7 @@ on:
       - 'bench/**'
       - 'quant/**'
       - 'research/**'
+      - 'hardware/**'
   pull_request:
 
 concurrency:
@@ -42,11 +43,13 @@ jobs:
           python -m py_compile tools/calibrate_feasibility_map.py
           python -m py_compile tools/build_measured_map.py
           python -m py_compile tools/aggregate_feasibility_runs.py
+          python -m py_compile tools/simulate_r920_tensorwave.py
           python -m py_compile tests/test_safetensors_tools.py
           python -m py_compile tests/test_runtime_schedule.py
           python -m py_compile tests/test_q4_quantization.py
           python -m py_compile tests/test_feasibility_map.py
           python -m py_compile tests/test_feasibility_calibration.py
+          python -m py_compile tests/test_r920_simulator.py
 
       - name: Unit tests
         run: python -m unittest discover -s tests -p 'test_*.py' -v
@@ -64,3 +67,13 @@ jobs:
           test -s build-map-smoke/feasibility-map.csv
           test -s build-map-smoke/FEASIBILITY-MAP.md
           test -s build-map-smoke/feasibility-map.svg
+
+      - name: Generate R920 simulation smoke result
+        run: |
+          python tools/simulate_r920_tensorwave.py \
+            --output-dir build-r920-smoke \
+            --model-b 70 \
+            --h2d-gbps 12 \
+            --effective-tflops 10
+          test -s build-r920-smoke/simulation.json
+          test -s build-r920-smoke/SIMULATION-REPORT.md
