@@ -86,9 +86,19 @@ if ($LASTEXITCODE -ne 0) {
     throw "Q4 quantization failed with exit code $LASTEXITCODE"
 }
 
-$SourcePlan = Get-Content -Raw $PlanPath | ConvertFrom-Json
 $Q4PlanPath = Join-Path $Prepared 'q4-plan.json'
 $Q4PackPath = Join-Path $Prepared 'weights-q4.pack'
+
+Write-Host "`n=== Phase 3D: verify Q4 geometry + every tile SHA-256 ===" -ForegroundColor Cyan
+& $Python.Source `
+    (Join-Path $Root 'tools\verify_q4_pack.py') `
+    --plan $Q4PlanPath `
+    --pack $Q4PackPath
+if ($LASTEXITCODE -ne 0) {
+    throw "Q4 pack verification failed with exit code $LASTEXITCODE"
+}
+
+$SourcePlan = Get-Content -Raw $PlanPath | ConvertFrom-Json
 $Q4Plan = Get-Content -Raw $Q4PlanPath | ConvertFrom-Json
 $Schedule = Get-Content -Raw $SchedulePath | ConvertFrom-Json
 
@@ -103,7 +113,7 @@ if ([int]$Q4Plan.quantization.group_size -ne 32 -or [int]$Q4Plan.quantization.gr
     throw 'CUDA Q4 proof currently implements only Q4_SYM_G32_F32S.'
 }
 
-Write-Host "`n=== Phase 3D: build CUDA Q4 dequant+GEMM proof ===" -ForegroundColor Cyan
+Write-Host "`n=== Phase 3E: build CUDA Q4 dequant+GEMM proof ===" -ForegroundColor Cyan
 cmake -S $Root -B $Build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=86
 if ($LASTEXITCODE -ne 0) { throw "CMake configure failed with exit code $LASTEXITCODE" }
 cmake --build $Build --config Release --parallel
@@ -131,6 +141,7 @@ $Metadata = [ordered]@{
     runtime_schedule = $SchedulePath
     q4_plan = $Q4PlanPath
     q4_pack = $Q4PackPath
+    q4_pack_verified = $true
     source_dtype = [string]$Q4Plan.geometry.source_dtype
     q4_format = [string]$Q4Plan.quantization.name
     compression_x = [double]$Q4Plan.geometry.source_to_q4_compression_x
@@ -156,6 +167,7 @@ Write-Host "Source MiB:      $([math]::Round(([double]$Q4Plan.geometry.source_pa
 Write-Host "Q4 MiB:          $([math]::Round(([double]$Q4Plan.geometry.q4_pack_bytes / 1MB), 2))"
 Write-Host "Weight RMS err:  $($Q4Plan.quality.rms_error)"
 Write-Host "Weight SNR dB:   $($Q4Plan.quality.snr_db)"
+Write-Host 'Q4 integrity:    PASS (geometry + every tile SHA-256)'
 Write-Host 'VRAM Q4 slots:   2 fixed compressed addresses'
 Write-Host 'Dequant buffer:  1 fixed FP16 tile'
 Write-Host "Results:         $RunDir"
