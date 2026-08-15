@@ -60,7 +60,7 @@ def effective_tflops(data: dict[str, Any]) -> float | None:
     if min(m, k, n, tiles) <= 0:
         return None
 
-    # Prefer GEMM-only time when Phase 3 reports it. Fall back to compute time.
+    # Phase 3 reports GEMM-only time. Phase 1/2 report compute time.
     ms = nested_number(
         data,
         ("overlapped", "gemm_ms"),
@@ -72,6 +72,16 @@ def effective_tflops(data: dict[str, Any]) -> float | None:
 
     flops = 2.0 * m * k * n * tiles
     return flops / (ms / 1000.0) / 1.0e12
+
+
+def physical_h2d_gbps(data: dict[str, Any]) -> float | None:
+    # Q4 Phase 3 names the physical wire metric compressed_h2d_gbps.
+    # Phase 1/2 use h2d_gbps.
+    return nested_number(
+        data,
+        ("overlapped", "compressed_h2d_gbps"),
+        ("overlapped", "h2d_gbps"),
+    )
 
 
 def correctness(data: dict[str, Any]) -> bool:
@@ -90,7 +100,7 @@ def collect(run_dir: Path) -> dict[str, Any]:
 
     for data in results:
         m, k, n, tiles = geometry(data)
-        h2d = nested_number(data, ("overlapped", "h2d_gbps"))
+        h2d = physical_h2d_gbps(data)
         tflops = effective_tflops(data)
         ok = correctness(data)
         if ok and h2d is not None and h2d > 0:
@@ -101,20 +111,29 @@ def collect(run_dir: Path) -> dict[str, Any]:
         rows.append(
             {
                 "file": data["__path"],
+                "experiment": data.get("experiment", "unknown"),
                 "m": m,
                 "k": k,
                 "n": n,
                 "tiles": tiles,
                 "correctness_ok": ok,
-                "h2d_gbps": h2d,
+                "physical_h2d_gbps": h2d,
+                "source_equivalent_h2d_gbps": nested_number(
+                    data, ("overlapped", "source_equivalent_h2d_gbps")
+                ),
                 "effective_tflops": tflops,
+                "dequant_ms": nested_number(data, ("overlapped", "dequant_ms")),
+                "gemm_ms": nested_number(data, ("overlapped", "gemm_ms")),
                 "starvation_pct": nested_number(data, ("overlapped", "steady_starvation_pct")),
                 "hidden_transfer_pct": nested_number(data, ("overlapped", "steady_hidden_transfer_pct")),
             }
         )
 
     if not h2d_values:
-        raise ValueError("no correctness-passing result contains positive overlapped.h2d_gbps")
+        raise ValueError(
+            "no correctness-passing result contains positive physical H2D bandwidth "
+            "(compressed_h2d_gbps or h2d_gbps)"
+        )
     if not tflops_values:
         raise ValueError("no correctness-passing result has enough geometry/time data to estimate effective TFLOP/s")
 
@@ -143,8 +162,8 @@ def main() -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
-    print(f"Measured H2D median: {payload['effective_h2d_gbps_median']:.3f} GB/s")
-    print(f"Measured effective compute median: {payload['effective_tflops_median']:.3f} TFLOP/s")
+    print(f"Measured physical H2D median: {payload['effective_h2d_gbps_median']:.3f} GB/s")
+    print(f"Measured effective GEMM median: {payload['effective_tflops_median']:.3f} TFLOP/s")
     print("Use these as --pcie-gbps and --effective-tflops for build_feasibility_map.py")
     return 0
 
