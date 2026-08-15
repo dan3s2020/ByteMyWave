@@ -29,7 +29,8 @@ Nu există încă implementare în acest repository. În această fază sunt pă
 3. arhitectura propusă a runtime-ului;
 4. întrebările deschise;
 5. regulile pentru lucru simultan în echipă;
-6. transcriptul conversației din care a pornit proiectul.
+6. transcriptul conversației din care a pornit proiectul;
+7. inputul utilizatorului păstrat separat, verbatim, ca să nu se piardă intenția originală prin rezumare.
 
 ## Structura documentației
 
@@ -41,6 +42,7 @@ Nu există încă implementare în acest repository. În această fază sunt pă
 - [`docs/05-OPEN-QUESTIONS.md`](docs/05-OPEN-QUESTIONS.md) — lucrurile care trebuie demonstrate experimental.
 - [`docs/06-COLLABORATION.md`](docs/06-COLLABORATION.md) — organizarea pentru 5 persoane care lucrează simultan.
 - [`docs/TRANSCRIPT.md`](docs/TRANSCRIPT.md) — copia conversației relevante care a dus la proiect.
+- [`docs/USER-INPUT-VERBATIM.md`](docs/USER-INPUT-VERBATIM.md) — toate mesajele utilizatorului care au definit proiectul, păstrate fără reformulare.
 
 ## Principiul care nu trebuie pierdut
 
