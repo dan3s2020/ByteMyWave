@@ -22,6 +22,7 @@ def load_result_files(run_dir: Path) -> list[dict[str, Any]]:
         g = data.get("geometry") or data.get("config") or {}
         ovl = data.get("overlapped") or {}
         seq = data.get("sequential") or {}
+        physical_h2d = float(ovl.get("compressed_h2d_gbps", ovl.get("h2d_gbps", 0.0)))
         rows.append(
             {
                 "run_dir": str(run_dir),
@@ -32,7 +33,8 @@ def load_result_files(run_dir: Path) -> list[dict[str, Any]]:
                 "k": int(g.get("k", 0)),
                 "n": int(g.get("n", 0)),
                 "tiles": int(g.get("tiles", g.get("tile_count", 0))),
-                "h2d_gbps": float(ovl.get("h2d_gbps", 0.0)),
+                "physical_h2d_gbps": physical_h2d,
+                "source_equivalent_h2d_gbps": float(ovl.get("source_equivalent_h2d_gbps", physical_h2d)),
                 "starvation_pct": float(ovl.get("steady_starvation_pct", 0.0)),
                 "hidden_pct": float(ovl.get("steady_hidden_transfer_pct", 0.0)),
                 "wall_ms": float(ovl.get("wall_ms", 0.0)),
@@ -100,7 +102,8 @@ def main() -> int:
                 f"- experiment: `{best['experiment']}`",
                 f"- M/K/N: `{best['m']}/{best['k']}/{best['n']}`",
                 f"- tiles: `{best['tiles']}`",
-                f"- H2D: **{best['h2d_gbps']:.3f} GB/s**",
+                f"- physical H2D: **{best['physical_h2d_gbps']:.3f} GB/s**",
+                f"- source-equivalent feed: **{best['source_equivalent_h2d_gbps']:.3f} GB/s**",
                 f"- starvation: **{best['starvation_pct']:.3f}%**",
                 f"- hidden transfer: **{best['hidden_pct']:.3f}%**",
                 f"- wall: **{best['wall_ms']:.3f} ms**",
@@ -112,14 +115,15 @@ def main() -> int:
         [
             "## All points",
             "",
-            "| exp | M | K | N | tiles | H2D GB/s | starvation % | hidden % | gemm ms | dequant ms | wall ms | correct | class |",
-            "|:---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|:---:|:---|",
+            "| exp | M | K | N | tiles | physical H2D GB/s | source-eq GB/s | starvation % | hidden % | gemm ms | dequant ms | wall ms | correct | class |",
+            "|:---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|:---:|:---|",
         ]
     )
     for row in sorted(rows, key=lambda r: (r["experiment"], r["n"], r["m"])):
         lines.append(
             f"| {row['experiment']} | {row['m']} | {row['k']} | {row['n']} | {row['tiles']} | "
-            f"{row['h2d_gbps']:.3f} | {row['starvation_pct']:.3f} | {row['hidden_pct']:.3f} | "
+            f"{row['physical_h2d_gbps']:.3f} | {row['source_equivalent_h2d_gbps']:.3f} | "
+            f"{row['starvation_pct']:.3f} | {row['hidden_pct']:.3f} | "
             f"{row['gemm_ms']:.3f} | {row['dequant_ms']:.3f} | {row['wall_ms']:.3f} | "
             f"{'yes' if row['correctness_ok'] else 'NO'} | {row['class']} |"
         )
