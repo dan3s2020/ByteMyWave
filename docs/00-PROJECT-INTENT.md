@@ -76,3 +76,63 @@ If starvation can be reduced to a small percentage of total execution time, then
 ## Current phase
 
 This repository is currently in **documentation-only phase**. No implementation claim has yet been demonstrated here. The next phase will be experimental proof on a single model block/tensor path before attempting complete MiniMax H3 execution.
+
+---
+
+# Extension: distributed cheap-memory Kimi K3 track
+
+The project has expanded the same economic observation into a second question:
+
+> If no single affordable machine has enough fast memory for a frontier-scale open-weight model, can the complete model be partitioned across multiple cheap DDR2/DDR3/DDR4 servers and still be exposed as one useful local model endpoint?
+
+The current target for this track is **Moonshot Kimi K3**.
+
+The official release reports a 2.8T-parameter MoE model with 104B activated parameters/token, 93 layers, 896 routed experts and 16 selected experts/token. The released Hugging Face checkpoint is currently about 1.56 TB.
+
+This changes the engineering problem from only:
+
+```text
+host RAM -> PCIe -> small VRAM window
+```
+
+to also include:
+
+```text
+many independent RAM/CPU nodes
+        |
+        +-> explicit tensor/expert ownership
+        +-> NUMA-local compute
+        +-> activation/expert traffic over a network fabric
+        v
+one OpenAI-compatible K3 endpoint
+```
+
+## Additional hypotheses to preserve
+
+11. **Independent server RAM pools do not need to be coherent to hold one logical model.** Tensor ownership can be explicit.
+12. **Weights should remain where they are computed.** The network should move activations/results rather than full weight matrices per token.
+13. **Layer/pipeline partitioning is primarily a capacity mechanism for single-sequence decode.** It must not be confused with automatic N× token/s scaling.
+14. **K3's MoE sparsity is the main opportunity for concurrent multi-node work.** Selected experts can be placed across independent memory controllers and computed in parallel.
+15. **Old RAM capacity is useful only if CPU kernels and network latency are also adequate.** RON/slot alone is not the final metric.
+16. **A token/s claim must be falsifiable.** Capacity calculations, roofline upper bounds and real measured decode performance are separate categories.
+
+## Distributed-track success ladder
+
+1. Full official K3 checkpoint tensor inventory is accounted for.
+2. Complete checkpoint fits in aggregate RAM with headroom.
+3. No expert pruning is required for the claimed full-model run.
+4. One real K3 primitive and one real K3 layer match the reference implementation.
+5. Two physical workers participate in the same correct token.
+6. Full 93-layer generation completes.
+7. A separate PC accesses the cluster through one OpenAI-compatible endpoint.
+8. An agentic client such as Kimi Code can use that endpoint.
+9. Real end-to-end decode performance is measured.
+10. Initial acceptance target: **>= 1.0 decoded token/s, batch=1, after warm-up**.
+
+The 1 tok/s value is a **target**, not a current claim. The benchmark/proof conditions are documented in `09-KIMI-K3-THROUGHPUT-MODEL.md`.
+
+Primary K3 sources:
+
+- https://github.com/MoonshotAI/Kimi-K3
+- https://huggingface.co/moonshotai/Kimi-K3/tree/main
+- https://huggingface.co/moonshotai/Kimi-K3/blob/main/config.json
