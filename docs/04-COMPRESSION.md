@@ -6,7 +6,7 @@ The proposed answer is that most compression/quantization should happen **before
 
 ## Offline conversion
 
-Start with the original checkpoint representation and convert it once into the execution format required by TensorWave.
+Start with the original checkpoint representation and convert it once into the execution format required by ByteMyWave.
 
 Conceptually:
 
@@ -15,7 +15,7 @@ Original BF16 / FP16 checkpoint
           |
           | one-time conversion
           v
-TensorWave packed representation
+ByteMyWave packed representation
 (Q8/Q6/Q5/Q4/Q3/Q2, metadata, atlas, execution index)
 ```
 
