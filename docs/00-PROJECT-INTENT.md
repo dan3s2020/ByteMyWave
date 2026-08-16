@@ -37,9 +37,9 @@ The larger motivation is to make a useful AI rig inside a low hardware budget in
 9. **The model should be representable as a graph/map/atlas.** This should identify exactly what every piece is, where it lives, what depends on it, and what is missing if a piece is unavailable.
 10. **Data representation itself may be exploitable.** Shared basis, quantization, parity/recovery, sparse structure, or other relationships between weights may reduce how much independent information must move.
 
-## What TensorWave is not
+## What ByteMyWave is not
 
-TensorWave is not based on the claim that software can change the physical bandwidth of PCIe or turn DDR3 into HBM.
+ByteMyWave is not based on the claim that software can change the physical bandwidth of PCIe or turn DDR3 into HBM.
 
 It instead investigates whether the total required traffic and exposed transfer latency can be reduced enough that those physical limitations stop dominating wall-clock inference time.
 
