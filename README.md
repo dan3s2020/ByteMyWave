@@ -1,6 +1,6 @@
 # ByteMyWave
 
-TensorWave este proiectul pentru investigarea unei arhitecturi de inferență în care **un model AI mult mai mare decât VRAM-ul disponibil este păstrat în RAM**, iar un GPU cu VRAM mic (ținta inițială: ~4 GB) este folosit ca **accelerator de calcul + fereastră/cache de lucru**, nu ca depozit complet al modelului.
+ByteMyWave este proiectul pentru investigarea unei arhitecturi de inferență în care **un model AI mult mai mare decât VRAM-ul disponibil este păstrat în RAM**, iar un GPU cu VRAM mic (ținta inițială: ~4 GB) este folosit ca **accelerator de calcul + fereastră/cache de lucru**, nu ca depozit complet al modelului.
 
 ## Ideea centrală
 
@@ -46,7 +46,7 @@ Nu există încă implementare în acest repository. În această fază sunt pă
 
 ## Principiul care nu trebuie pierdut
 
-TensorWave nu încearcă să pretindă că 4 GB VRAM „devin” fizic 24/64/128 GB VRAM.
+ByteMyWave nu încearcă să pretindă că 4 GB VRAM „devin” fizic 24/64/128 GB VRAM.
 
 În schimb, încearcă să facă astfel încât **GPU-ul să nu aibă nevoie să vadă simultan decât fereastra activă de date necesară operației curente**, iar restul modelului să fie ținut în RAM și pregătit din timp.
 
