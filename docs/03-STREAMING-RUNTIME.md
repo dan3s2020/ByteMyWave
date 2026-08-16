@@ -29,7 +29,7 @@ FFN projections
 next block
 ```
 
-Because this execution order is known, TensorWave proposes **scheduled prefetch**, not speculative guessing.
+Because this execution order is known, ByteMyWave proposes **scheduled prefetch**, not speculative guessing.
 
 ## Fundamental pipeline
 
