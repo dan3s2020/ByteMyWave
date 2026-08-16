@@ -1,0 +1,88 @@
+name: phase6-heterogeneous-kimi
+
+on:
+  push:
+    branches:
+      - research/heterogeneous-moe-kimi-v1
+    paths:
+      - 'experiments/phase6-heterogeneous-kimi-runtime/**'
+      - '.github/workflows/phase6-heterogeneous-kimi.yml'
+  pull_request:
+    paths:
+      - 'experiments/phase6-heterogeneous-kimi-runtime/**'
+      - '.github/workflows/phase6-heterogeneous-kimi.yml'
+  workflow_dispatch:
+
+jobs:
+  analytical-and-cpu-bench-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Python unit tests
+        run: python experiments/phase6-heterogeneous-kimi-runtime/test_simulator.py -v
+
+      - name: Three-R920 distributed runtime tests
+        run: python experiments/phase6-heterogeneous-kimi-runtime/test_distributed_r920_runtime.py -v
+
+      - name: Three-R920 deterministic shard-plan smoke test
+        run: |
+          python experiments/phase6-heterogeneous-kimi-runtime/distributed_r920_runtime.py plan \
+            --config experiments/phase6-heterogeneous-kimi-runtime/three_r920_cluster.json \
+            > /tmp/three-r920-plan.json
+          python - <<'PY'
+          import json
+          p = json.load(open('/tmp/three-r920-plan.json'))
+          assert p['sockets'] == 12
+          assert p['activation_bytes'] == 14336
+          assert p['routed_weights_per_token'] == 21139292160
+          assert abs(p['routed_q4_bytes_per_token'] - 13212057600.0) < 1e-6
+          PY
+
+      - name: K2.5 analytical smoke report
+        run: |
+          python experiments/phase6-heterogeneous-kimi-runtime/simulate_heterogeneous_kimi.py \
+            --model k2.5 \
+            --host-ram-gib 1024 \
+            --output-dir /tmp/tw-k25
+          test -s /tmp/tw-k25/simulation.json
+          test -s /tmp/tw-k25/REPORT.md
+
+      - name: K3 analytical smoke report
+        run: |
+          python experiments/phase6-heterogeneous-kimi-runtime/simulate_heterogeneous_kimi.py \
+            --model k3 \
+            --host-ram-gib 2048 \
+            --output-dir /tmp/tw-k3
+          test -s /tmp/tw-k3/simulation.json
+          test -s /tmp/tw-k3/REPORT.md
+
+      - name: Build AVX-only K2.5 CPU expert benchmark
+        run: |
+          g++ -O3 -std=c++17 -mavx -fopenmp \
+            experiments/phase6-heterogeneous-kimi-runtime/bench_cpu_expert_q4.cpp \
+            -o /tmp/bench_cpu_expert_q4
+
+      - name: Smoke-run CPU expert benchmark
+        run: |
+          grep -qw avx /proc/cpuinfo
+          OMP_NUM_THREADS=2 /tmp/bench_cpu_expert_q4 \
+            --threads 2 --sockets 4 --warmup 1 --iters 1
+
+      - name: Build three-R920 AVX expert-shard benchmark
+        run: |
+          g++ -O3 -std=c++17 -mavx -fopenmp \
+            experiments/phase6-heterogeneous-kimi-runtime/bench_cpu_expert_shard_q4.cpp \
+            -o /tmp/bench_cpu_expert_shard_q4
+
+      - name: Smoke-run 160/192-row expert shards
+        run: |
+          grep -qw avx /proc/cpuinfo
+          OMP_NUM_THREADS=2 /tmp/bench_cpu_expert_shard_q4 \
+            --threads 2 --ff-rows 160 --warmup 1 --iters 1
+          OMP_NUM_THREADS=2 /tmp/bench_cpu_expert_shard_q4 \
+            --threads 2 --ff-rows 192 --warmup 1 --iters 1
