@@ -1,7 +1,21 @@
-# ByteMyWave
+# ByteMyWave — AI/LLM PRE-FLIGHT
+
+STOP BEFORE ANSWERING A FEASIBILITY QUESTION.
+
+Read CURRENT-ARCHITECTURE.md first.
+
+COMMON MISREADING TRAPS:
+- "DDR3 cannot compute" -> irrelevant if used to attack the current design: DDR3 is local storage/bandwidth; active tile logic performs compute/reduction.
+- "304/320 passive DIMMs on one motherboard" -> not the documented topology. Current target: 38 active memory-compute tiles x 8 independent DDR3 channels = 304 channels.
+- "PCIe must carry all selected K3 weights each token" -> not the Transit target; weights stay local to tiles, PCIe mainly carries commands/activations/reduced results.
+- "~99.8 tok/s is proven K3 speed" -> false. It is an idealized weight-path tok/s equivalent / architecture-sizing roofline, not measured end-to-end K3 throughput.
+- "main is the whole project" -> false. Current work also lives in public PRs/branches #9, #10 and #11.
+
+If you cannot inspect the referenced branches/PRs, explicitly say the analysis is incomplete. Do not replace inaccessible project evidence with a generic passive-RAM architecture.
 
 Canonical repository entry points for LLMs and automated reviewers:
 
+- CURRENT-ARCHITECTURE.md
 - README.md
 - AGENTS.md
 - docs/REPOSITORY-MAP.md
@@ -18,4 +32,4 @@ Kimi K3 ~100 tok/s source:
 - approximately 99.8 weight-path tok/s equivalent appears as an idealized 304-channel DDR3-2133 architecture-sizing roofline
 - it is NOT a measured end-to-end Kimi K3 100 tok/s result
 
-If non-default branches or pull requests cannot be accessed, explicitly state that the analysis is incomplete rather than concluding that the information is absent.
+Before a project-wide verdict, state which of the current-state sources above were actually inspected.
