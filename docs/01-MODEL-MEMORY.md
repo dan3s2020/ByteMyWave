@@ -92,7 +92,7 @@ Therefore the important question is not "does the whole matrix fit?" but:
 
 > What is the smallest mathematically useful tile that can be transferred, dequantized and consumed efficiently without destroying GEMM efficiency?
 
-That becomes an experimental design variable for TensorWave.
+That becomes an experimental design variable for ByteMyWave.
 
 ## Read-only property during inference
 
