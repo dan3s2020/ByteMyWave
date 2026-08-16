@@ -1,0 +1,20 @@
+RefDes,Qty,Function,Preferred Part / Requirement,Assembly Note
+U1-U4,4,FPGA,XC5VLX110T-1FF1136 or pin/power-compatible approved Virtex-5 FF1136,FCBGA; prototype lot requires X-ray inspection
+JDIMM1-JDIMM16,16,DDR2 RDIMM socket,240-pin DDR2 ECC Registered DIMM socket rated for 1.8V DDR2,Confirm press-fit/THT/SMT process with assembler before layout freeze
+UCLK1,1,Reference oscillator,Low-jitter differential oscillator suitable for DDR2 controller reference clock,Exact frequency selected after controller project is generated
+UCLKBUF1,1,Clock fanout,Low-skew 1:4 differential clock fanout,Route equal-length outputs to FPGAs
+UPHY1-UPHY4,4,Gigabit Ethernet PHY,RGMII PHY compatible with selected FPGA VCCO and available supply rails,Prefer actively sourced part with reference design
+JETH1-JETH4,4,Ethernet connector,RJ45 with integrated magnetics or discrete magnetics + RJ45,One port per FPGA for Rev A
+JTAG1,1,Programming/debug,Standard Xilinx-compatible JTAG header,Daisy-chain all four FPGAs
+J12V1-J12V2,2,Power input,High-current Mini-Fit Jr / EPS-style 12V connector,Use separate fusing/current protection as required
+PSU_CORE1-4,4,FPGA core regulators,Synchronous buck sized from Xilinx power estimate + >=25% margin,One regulator per FPGA preferred for bring-up isolation
+PSU_AUX,1+,FPGA auxiliary rails,Regulators per Virtex-5 power requirements,Final topology selected after power estimate
+PSU_DDR18,1+,DDR2 VDD/VDDQ,1.8V high-current synchronous buck,Segment/plane sizing based on 16 RDIMMs
+PSU_VTT,1+,DDR2 termination rail,0.9V source/sink DDR termination regulator,Must support DDR2 VTT transient current
+VREF,1+,DDR2 reference,Low-noise 0.9V VREF generation/filtering,Keep isolated from noisy switching nodes
+SUPERVISOR,1,Reset/power-good,Multi-rail supervisor/sequencer compatible with selected rails,Must enforce safe FPGA reset/configuration
+MON12V,1,Power monitor,Optional current/voltage monitor footprint on 12V input,Populate on prototypes
+MONDDR,1,Power monitor,Optional current/voltage monitor footprint on DDR rail,Populate on prototypes
+TP_SET,1 set,Bring-up/test,Test points for every power rail clocks resets JTAG and DDR calibration status,Required on Rev A
+HS_MOUNT,4 sets,Thermal,FPGA heatsink mounting hardware footprint,Forced airflow assumed
+MOUNT,4+,Mechanical,Board mounting/support holes,Additional support near DIMM field
