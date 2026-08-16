@@ -1,4 +1,4 @@
-# Transcript — Conversation That Led to TensorWave
+# Transcript — Conversation That Led to ByteMyWave
 
 > Captured from the visible ChatGPT conversation that led directly to this repository. This file is preserved as project context. Tool/widget UI elements and some rendered citation chrome are not part of the conceptual project and may not reproduce identically in Markdown.
 
@@ -811,7 +811,7 @@ E creat
 Repo-ul nou detectat pe GitHub este:
 
 ```text
-dan3s2020/TensorWave
+dan3s2020/ByteMyWave
 ```
 
 Este privat, pe branch-ul implicit `main`, și a fost creat gol.
