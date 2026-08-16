@@ -1,6 +1,6 @@
 # User Input — Verbatim
 
-This file preserves the user's statements from the conversation that created TensorWave, without rewriting them into technical language.
+This file preserves the user's statements from the conversation that created ByteMyWave, without rewriting them into technical language.
 
 ---
 
