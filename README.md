@@ -20,19 +20,36 @@ Modelul principal de interes discutat până acum este **MiniMax H3**, dar arhit
 
 ## Stadiul actual
 
-**Faza 0 — documentare și formalizarea ideii.**
+**Faza 1 — proof experimental pentru transfer/compute overlap.**
 
-Nu există încă implementare în acest repository. În această fază sunt păstrate:
+Faza 0 de documentare este încheiată. Prima implementare nu încearcă încă să ruleze MiniMax H3. Mai întâi testează separat ipoteza fundamentală:
 
-1. cerințele și ideile originale;
-2. modelul mental al memoriei și execuției;
-3. arhitectura propusă a runtime-ului;
-4. întrebările deschise;
-5. regulile pentru lucru simultan în echipă;
-6. transcriptul conversației din care a pornit proiectul;
-7. inputul utilizatorului păstrat separat, verbatim, ca să nu se piardă intenția originală prin rezumare.
+> în timp ce GPU-ul calculează tile-ul `N`, poate transferul RAM → VRAM al tile-ului `N+1` să fie ascuns suficient încât GPU-ul să nu rămână flămând după date?
 
-## Structura documentației
+Proof-ul actual folosește:
+
+- weights FP16 rezidente în pinned RAM;
+- GEMM real prin cuBLAS;
+- două sloturi VRAM fixe;
+- stream CUDA separat pentru H2D și compute;
+- CUDA events pentru dependențe;
+- baseline secvențial versus pipeline overlapped;
+- măsurare explicită a `GPU starvation`;
+- verificarea numerică a rezultatului pipeline-ului față de baseline.
+
+Experimentul este documentat în [`experiments/phase1-h2d-overlap/README.md`](experiments/phase1-h2d-overlap/README.md).
+
+Pe Windows, după instalarea CUDA Toolkit + CMake + Visual Studio C++ tools:
+
+```powershell
+.\scripts\run-proof.ps1
+```
+
+Scriptul face implicit un sweep pe mai multe valori `M` pentru a găsi punctul în care compute-ul devine suficient de lung încât transferul următorului tile să fie ascuns.
+
+## Structura proiectului
+
+### Documentație de bază
 
 - [`docs/00-PROJECT-INTENT.md`](docs/00-PROJECT-INTENT.md) — scop, constrângeri și ipoteze.
 - [`docs/01-MODEL-MEMORY.md`](docs/01-MODEL-MEMORY.md) — ce există efectiv în memoria modelului.
@@ -42,7 +59,14 @@ Nu există încă implementare în acest repository. În această fază sunt pă
 - [`docs/05-OPEN-QUESTIONS.md`](docs/05-OPEN-QUESTIONS.md) — lucrurile care trebuie demonstrate experimental.
 - [`docs/06-COLLABORATION.md`](docs/06-COLLABORATION.md) — organizarea pentru 5 persoane care lucrează simultan.
 - [`docs/TRANSCRIPT.md`](docs/TRANSCRIPT.md) — copia conversației relevante care a dus la proiect.
-- [`docs/USER-INPUT-VERBATIM.md`](docs/USER-INPUT-VERBATIM.md) — toate mesajele utilizatorului care au definit proiectul, păstrate fără reformulare.
+- [`docs/USER-INPUT-VERBATIM.md`](docs/USER-INPUT-VERBATIM.md) — mesajele utilizatorului care au definit proiectul, păstrate fără reformulare.
+
+### Implementare experimentală
+
+- [`src/tensorwave_stream_proof.cu`](src/tensorwave_stream_proof.cu) — benchmark CUDA/cuBLAS pentru pipeline-ul fixed-VRAM.
+- [`scripts/run-proof.ps1`](scripts/run-proof.ps1) — build + sweep automat pe Windows.
+- [`experiments/phase1-h2d-overlap/`](experiments/phase1-h2d-overlap/) — protocolul experimentului și criteriile de succes/eșec.
+- [`docs/adr/0001-phase1-fixed-vram-ring.md`](docs/adr/0001-phase1-fixed-vram-ring.md) — decizia arhitecturală pentru primul proof.
 
 ## Principiul care nu trebuie pierdut
 
