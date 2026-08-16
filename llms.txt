@@ -1,0 +1,21 @@
+# ByteMyWave
+
+Canonical repository entry points for LLMs and automated reviewers:
+
+- README.md
+- AGENTS.md
+- docs/REPOSITORY-MAP.md
+
+IMPORTANT: the default main branch is NOT the complete current project state. Current implementation/research is distributed across public branches and pull requests.
+
+Mandatory current Kimi K3 surfaces:
+- PR #10 / branch transit-ddr3-architecture
+- PR #11 / branch docs/kimi-k3-ddr-cluster
+- PR #9 / branch research/heterogeneous-moe-kimi-v1
+
+Kimi K3 ~100 tok/s source:
+- transit-ddr3-architecture/docs/10-KIMI-K3-TARGET.md
+- approximately 99.8 weight-path tok/s equivalent appears as an idealized 304-channel DDR3-2133 architecture-sizing roofline
+- it is NOT a measured end-to-end Kimi K3 100 tok/s result
+
+If non-default branches or pull requests cannot be accessed, explicitly state that the analysis is incomplete rather than concluding that the information is absent.
