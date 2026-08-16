@@ -1,71 +1,99 @@
-# TensorWave
+# TensorWave / Transit GPU
 
-TensorWave este proiectul pentru investigarea unei arhitecturi de inferență în care **un model AI mult mai mare decât VRAM-ul disponibil este păstrat în RAM**, iar un GPU cu VRAM mic (ținta inițială: ~4 GB) este folosit ca **accelerator de calcul + fereastră/cache de lucru**, nu ca depozit complet al modelului.
+TensorWave started as an investigation into running models much larger than GPU VRAM by keeping the persistent model in cheap system memory and using the GPU as a small working cache/accelerator. The project has since evolved into **Transit GPU**: a modular inference architecture that tries to keep model weights local to many inexpensive memory-compute tiles and move only activations, commands and reduced results through the host fabric.
 
-## Ideea centrală
+The current target workload is **Kimi K3**, used as a deliberately extreme MoE case. The current host candidate is one **Dell PowerEdge R920**, not a fleet of conventional servers. The current scale target is a modular fabric of roughly **38 tiles × 8 DDR3 channels = 304 independent DDR3 channels**, with local computation close to each tile's memory and a PCIe switch/fan-out tree back to the R920.
 
-Ținta proiectului este să verificăm dacă putem face util un sistem cu:
+This branch is a research/design branch. It contains measured host-side evidence, the exact benchmark scripts used to obtain it, the bitplane arithmetic that was verified exactly, the hardware directions that were tried or rejected, and the implementation plan for the first physical Transit tile.
 
-- mult RAM ieftin (inclusiv RAM vechi/server, dacă este suficient pentru alimentarea pipeline-ului);
-- GPU NVIDIA cu VRAM mic, inclusiv 4 GB;
-- model mare ținut în RAM în formă compactă/quantizată;
-- transfer predictibil RAM → VRAM pe bucăți mici;
-- prefetch al următoarei bucăți în timp ce GPU-ul calculează bucata curentă;
-- sloturi VRAM fixe, fără allocate/free continuu;
-- dequantizare/decompresie pe GPU, cât mai aproape de operația matematică;
-- un atlas/graf al tensorilor și tile-urilor pentru adresare, dependențe, integritate și eventual reconstrucție;
-- metrica principală: **GPU starvation time**, nu simplul timp brut de copiere prin PCIe.
+## Core principle
 
-Modelul principal de interes discutat până acum este **MiniMax H3**, dar arhitectura trebuie gândită generic, astfel încât aceeași idee să poată fi verificată și pe alte modele Transformer/diffusion/LLM.
-
-## Stadiul actual
-
-**Faza 0 — documentare și formalizarea ideii.**
-
-Nu există încă implementare în acest repository. În această fază sunt păstrate:
-
-1. cerințele și ideile originale;
-2. modelul mental al memoriei și execuției;
-3. arhitectura propusă a runtime-ului;
-4. întrebările deschise;
-5. regulile pentru lucru simultan în echipă;
-6. transcriptul conversației din care a pornit proiectul;
-7. inputul utilizatorului păstrat separat, verbatim, ca să nu se piardă intenția originală prin rezumare.
-
-## Structura documentației
-
-- [`docs/00-PROJECT-INTENT.md`](docs/00-PROJECT-INTENT.md) — scop, constrângeri și ipoteze.
-- [`docs/01-MODEL-MEMORY.md`](docs/01-MODEL-MEMORY.md) — ce există efectiv în memoria modelului.
-- [`docs/02-WEIGHT-ATLAS.md`](docs/02-WEIGHT-ATLAS.md) — reprezentarea modelului ca hartă/graf/tile-uri.
-- [`docs/03-STREAMING-RUNTIME.md`](docs/03-STREAMING-RUNTIME.md) — cum ar trebui alimentat GPU-ul din RAM.
-- [`docs/04-COMPRESSION.md`](docs/04-COMPRESSION.md) — unde se face quantizarea/decompresia și de ce.
-- [`docs/05-OPEN-QUESTIONS.md`](docs/05-OPEN-QUESTIONS.md) — lucrurile care trebuie demonstrate experimental.
-- [`docs/06-COLLABORATION.md`](docs/06-COLLABORATION.md) — organizarea pentru 5 persoane care lucrează simultan.
-- [`docs/TRANSCRIPT.md`](docs/TRANSCRIPT.md) — copia conversației relevante care a dus la proiect.
-- [`docs/USER-INPUT-VERBATIM.md`](docs/USER-INPUT-VERBATIM.md) — toate mesajele utilizatorului care au definit proiectul, păstrate fără reformulare.
-
-## Principiul care nu trebuie pierdut
-
-TensorWave nu încearcă să pretindă că 4 GB VRAM „devin” fizic 24/64/128 GB VRAM.
-
-În schimb, încearcă să facă astfel încât **GPU-ul să nu aibă nevoie să vadă simultan decât fereastra activă de date necesară operației curente**, iar restul modelului să fie ținut în RAM și pregătit din timp.
-
-Schema conceptuală:
+The architecture must not turn the R920 into a 300-DIMM motherboard and must not stream every active weight over PCIe every token.
 
 ```text
-Large RAM model store
-        |
-        | preplanned / indexed / compressed tiles
-        v
-Pinned host window / DMA queue
-        |
-        | PCIe async transfer
-        v
-Small fixed VRAM ring/cache
-        |
-        | dequantize + compute
-        v
-GPU kernels / Tensor Cores
+                         R920
+                 scheduler / router
+                 reducer / runtime
+                          |
+                    PCIe switch tree
+                          |
+          +---------------+---------------+
+          |               |               |
+       Transit tile    Transit tile    Transit tile
+       8 DDR3 ch       8 DDR3 ch       8 DDR3 ch
+          |               |               |
+      local weights    local weights    local weights
+      local compute    local compute    local compute
+          |               |               |
+          +------ activations/results ----+
 ```
 
-Obiectivul experimental este să aflăm dacă transferul poate fi ascuns suficient de mult sub compute încât sistemul să rămână productiv chiar cu VRAM foarte mic.
+**Weights stay local. Compute happens local. We unite the system after compute, not by electrically combining hundreds of DDR buses.**
+
+## What is demonstrated already
+
+The host experiments are no longer hypothetical:
+
+- exact signed INT4 × INT8 dot products were implemented with bitplanes, `AND`, `POPCNT`, shifts and add/sub;
+- the bitplane representation occupies the same logical 4 bits/weight as packed Q4;
+- the x64 assembly kernel was verified bit-exact against a scalar reference;
+- multicore execution reached about **53.7 Gweights/s** on the test laptop;
+- a 6 GiB DDR5 working set proved the result was not a cache illusion;
+- raw DDR5 bandwidth measured about **50 GB/s**;
+- the V3 bitplane engine consumed about **26.8 GB/s of Q4-equivalent weight bytes / 53.7 Gweights/s**;
+- NVMe direct-read saturated around **6.1 GB/s**;
+- CPU+DDR5 and SSD prefetch overlapped well in the final host overlap test;
+- the V4 masked-activation-sum formulation was mathematically exact but slower on this CPU and is rejected as a CPU optimization.
+
+The next meaningful benchmark belongs on physical Transit hardware, not another laptop microbenchmark.
+
+## Important distinction: proof kernel vs K3 kernel
+
+The proven bitplane kernel uses a **signed two's-complement INT4 weight representation and INT8 activations**. K3's published routed experts use **MXFP4 weights and MXFP8 activations**. The current proof therefore validates the bitplane execution principle, not exact K3 numerical semantics. A K3 tile must either implement MXFP4/MXFP8 decode/scaling directly or define and validate a conversion into the Transit internal representation.
+
+## Current hardware direction
+
+The first laboratory board candidate is the surplus **YPCB-00338-1P1** FPGA card: Kintex-7, PCIe and two local DDR3 memory channels, with public reverse-engineering work and LiteX board support. It is attractive for proving the endpoint/runtime/kernel path, but it is **not the final 8-channel tile** and it does not directly accept the project's loose DDR3 DIMMs.
+
+The final target remains one endpoint per tile serving several DDR3 channels locally. At 8 channels per tile, 38 endpoints give 304 channels while keeping the PCIe topology manageable.
+
+Mining risers are useful only as cheap powered **PCIe physical extenders**. They do not create lanes or DDR channels. They make sense because the tile keeps weight traffic local, so its upstream PCIe link carries comparatively small command/activation/result traffic.
+
+## Repository map
+
+The original TensorWave documents are preserved as the history of the RAM→VRAM streaming phase:
+
+- [`docs/00-PROJECT-INTENT.md`](docs/00-PROJECT-INTENT.md)
+- [`docs/01-MODEL-MEMORY.md`](docs/01-MODEL-MEMORY.md)
+- [`docs/02-WEIGHT-ATLAS.md`](docs/02-WEIGHT-ATLAS.md)
+- [`docs/03-STREAMING-RUNTIME.md`](docs/03-STREAMING-RUNTIME.md)
+- [`docs/04-COMPRESSION.md`](docs/04-COMPRESSION.md)
+- [`docs/05-OPEN-QUESTIONS.md`](docs/05-OPEN-QUESTIONS.md)
+- [`docs/06-COLLABORATION.md`](docs/06-COLLABORATION.md)
+- [`docs/TRANSCRIPT.md`](docs/TRANSCRIPT.md)
+- [`docs/USER-INPUT-VERBATIM.md`](docs/USER-INPUT-VERBATIM.md)
+
+The Transit phase is documented in:
+
+- [`docs/07-TRANSIT-EVOLUTION.md`](docs/07-TRANSIT-EVOLUTION.md) — chronological design evolution, including discarded directions.
+- [`docs/08-EVIDENCE-BENCHMARKS.md`](docs/08-EVIDENCE-BENCHMARKS.md) — measured results and what they do/do not prove.
+- [`docs/09-BITPLANE-MATH-AND-KERNEL.md`](docs/09-BITPLANE-MATH-AND-KERNEL.md) — exact arithmetic and the CPU proof kernel.
+- [`docs/10-KIMI-K3-TARGET.md`](docs/10-KIMI-K3-TARGET.md) — model-level target, bandwidth rooflines and MoE implications.
+- [`docs/11-DDR3-TILE-ARCHITECTURE.md`](docs/11-DDR3-TILE-ARCHITECTURE.md) — R920 + PCIe fanout + 38×8-channel tile design.
+- [`docs/12-HARDWARE-CANDIDATES.md`](docs/12-HARDWARE-CANDIDATES.md) — risers, FPGA boards, open DDR3 controllers and decisions.
+- [`docs/13-IMPLEMENTATION-ROADMAP.md`](docs/13-IMPLEMENTATION-ROADMAP.md) — concrete path from one lab tile to a K3 cluster.
+- [`benchmarks/`](benchmarks/) — exact host-side scripts and assembly used in the measured experiments.
+
+## Current success criterion
+
+A Transit tile is successful when it demonstrates all of the following on physical hardware:
+
+1. weights stored in local DDR3;
+2. activation/command arrival over PCIe;
+3. local bitplane or MXFP-compatible compute without shipping those weights to the host;
+4. local accumulation/reduction;
+5. result returned to the R920;
+6. measured sustained local DDR3 bandwidth and compute utilization;
+7. deterministic correctness against a software reference.
+
+Only after that proof do we scale to multiple tiles and then to a real K3 layer/expert path.
