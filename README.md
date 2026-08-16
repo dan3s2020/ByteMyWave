@@ -62,6 +62,7 @@ Nu există încă o implementare completă K3 în acest repository și nu este r
 - [`docs/08-HARDWARE-DDR2-DDR3-DDR4.md`](docs/08-HARDWARE-DDR2-DDR3-DDR4.md) — servere, plăci, FRU/part numbers, compatibilitate RAM, calcule de capacitate și lead-uri de piață.
 - [`docs/09-KIMI-K3-THROUGHPUT-MODEL.md`](docs/09-KIMI-K3-THROUGHPUT-MODEL.md) — modelul de bandwidth/compute/network și condițiile pentru a demonstra X tokeni/s fără a inventa benchmark-uri.
 - [`docs/10-IMPLEMENTATION-PROCUREMENT-PLAN.md`](docs/10-IMPLEMENTATION-PROCUREMENT-PLAN.md) — ordinea de achiziție, benchmark, kernel development, distributed runtime și integrarea cu agentic frameworks.
+- [`docs/11-RESEARCH-LOG-2026-08-16.md`](docs/11-RESEARCH-LOG-2026-08-16.md) — jurnalul complet al căutării DDR2/DDR3/DDR4, lead-urilor, ideilor abandonate și corecțiilor.
 - [`docs/TRANSCRIPT.md`](docs/TRANSCRIPT.md) — copia conversației relevante care a dus la proiect.
 - [`docs/USER-INPUT-VERBATIM.md`](docs/USER-INPUT-VERBATIM.md) — mesajele utilizatorului care au definit proiectul, păstrate separat.
 
