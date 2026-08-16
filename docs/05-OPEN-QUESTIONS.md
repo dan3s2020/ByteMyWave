@@ -1,6 +1,6 @@
 # 05 — Open Questions / Things That Must Be Demonstrated
 
-This file separates **ideas discussed** from **claims that have actually been proven inside TensorWave**.
+This file separates **ideas discussed** from **claims that have actually been proven inside ByteMyWave**.
 
 At repository initialization, none of the following has yet been demonstrated by code in this repository.
 
