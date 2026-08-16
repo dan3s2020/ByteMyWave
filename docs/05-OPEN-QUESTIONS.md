@@ -184,3 +184,188 @@ unhidden_transfer_time(tile)
 ```
 
 Those numbers determine whether deeper implementation work is justified.
+
+---
+
+# Kimi K3 distributed-cluster open questions
+
+The following questions apply to the DDR2/DDR3/DDR4 cluster track and are deliberately kept separate from the original RAM→GPU questions.
+
+## K3-A. What is the exact per-token compressed-weight traffic?
+
+The 104B activated-parameter figure and MXFP4 headline quantization give a useful lower-bound model, but `config.json` shows that not all paths use the same 4-bit representation.
+
+Need `tw-k3-inspect` to calculate the exact byte ownership and, where possible, the exact selected-weight bytes for:
+
+```text
+attention/KDA/MLA
+router
+shared experts
+routed experts
+norms
+lm_head
+vision path
+scale/quant metadata
+```
+
+The throughput model currently uses ~58 GB/token only as a screening estimate.
+
+## K3-B. Can old CPUs execute the released MXFP4 format efficiently enough?
+
+Need real kernels and measurements on the exact purchased CPU.
+
+Required ISA paths may include:
+
+```text
+scalar reference
+SSE2
+SSE4.x
+AVX
+AVX2
+AVX-512 on modern route
+```
+
+The proof is not “CPU can mathematically decode MXFP4”; the proof is measured compressed-weight throughput on real K3 tensor shapes.
+
+## K3-C. How much single-token bandwidth can expert parallelism actually aggregate?
+
+K3 selects 16 experts/token, but real router popularity may be skewed.
+
+Measure:
+
+```text
+selected expert histogram
+selected experts per physical node
+slowest expert owner per layer
+expert queue depth
+load imbalance
+benefit of round-robin vs frequency-aware placement
+benefit/cost of replicating hot experts
+```
+
+## K3-D. What should remain layer-local vs expert-sharded?
+
+Need to compare:
+
+- attention/local state replicated vs sharded;
+- shared experts local vs remote;
+- routed experts sharded globally vs within stage groups;
+- tensor parallelism inside a stage;
+- pure pipeline stages;
+- hybrid stage + expert groups.
+
+The fastest topology may differ between 5 DDR2 nodes, 3 R920 nodes and 10 dual-EPYC boards.
+
+## K3-E. Is 10 GbE sufficient for the first prototype?
+
+Do not answer from link bandwidth alone.
+
+Need real K3-like repeated expert dispatch benchmark measuring:
+
+```text
+payload bytes/layer
+collective latency/layer
+p50/p95/p99
+CPU pack/unpack overhead
+head-of-line blocking
+```
+
+40 GbE / InfiniBand / faster fabrics should be tested only if 10 GbE latency or bandwidth is demonstrated to be the limiter.
+
+## K3-F. Can a 1.56 TB full model remain entirely DRAM-resident?
+
+Capacity must include more than raw checkpoint bytes:
+
+- OS and daemons;
+- local runtime buffers;
+- activation buffers;
+- KDA/KV state;
+- transport buffers;
+- allocator fragmentation;
+- model manifest/metadata.
+
+Configurations that merely equal 1.56 TB nominal are rejected for full-RAM production testing.
+
+## K3-G. Is SSD tiering useful at all for interactive decode?
+
+If aggregate RAM is below checkpoint size, a cold-expert SSD cache is technically possible.
+
+Need to measure:
+
+```text
+expert miss rate
+SSD random read latency
+prefetch hit rate
+cache residency distribution
+stall time/token
+```
+
+The current procurement preference is enough DRAM to avoid SSD weight faults during steady-state decode.
+
+## K3-H. Can distributed output match the reference implementation?
+
+Required correctness ladder:
+
+```text
+P0 tensor inventory
+P1 primitive numerical tests
+P2 one real K3 layer
+P3 two-process split
+P4 full 93-layer forward
+P5 multi-token generation
+P6 OpenAI-compatible endpoint
+```
+
+Any performance result before this ladder passes is a kernel/network experiment, not a demonstrated K3 inference result.
+
+## K3-I. Can the cluster reach the initial >=1 decoded token/s target?
+
+Current screening model:
+
+```text
+~58 GB active compressed-weight traffic/token (rough estimate)
+~208 GFLOP/token linear-work estimate
+```
+
+Initial procurement screening threshold with margin:
+
+```text
+>= 72.5 GB/s effective critical-path parallel weight stream
+>= 312 GFLOP/s effective useful kernel throughput
+```
+
+This still does **not** prove 1 token/s because serial layer work and network synchronization must fit inside the same one-second budget.
+
+The actual proof is:
+
+```text
+measured full-model T_token <= 1.0 s
+```
+
+for a defined batch/context/prompt after warm-up.
+
+## K3-J. Which hardware route wins after power and bandwidth are included?
+
+Compare at least:
+
+```text
+HP DL785 G6 / Sun X4640 / X4600 M2 DDR2
+Dell R920 DDR3
+Supermicro H12DGQ-NT6 + EPYC DDR4
+```
+
+Metrics:
+
+```text
+acquisition RON
+usable TB
+measured DRAM GB/s
+measured expert kernel GB/s
+network latency
+wall power
+real K3 tok/s
+RON / tok/s
+watts / tok/s
+```
+
+The cheapest chassis is not automatically the cheapest inference system.
