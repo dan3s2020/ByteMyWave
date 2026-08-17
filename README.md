@@ -82,6 +82,7 @@ The Transit phase is documented in:
 - [`docs/11-DDR3-TILE-ARCHITECTURE.md`](docs/11-DDR3-TILE-ARCHITECTURE.md) — R920 + PCIe fanout + 38×8-channel tile design.
 - [`docs/12-HARDWARE-CANDIDATES.md`](docs/12-HARDWARE-CANDIDATES.md) — risers, FPGA boards, open DDR3 controllers and decisions.
 - [`docs/13-IMPLEMENTATION-ROADMAP.md`](docs/13-IMPLEMENTATION-ROADMAP.md) — concrete path from one lab tile to a K3 cluster.
+- [`docs/14-MEMORY-CONTROLLER-TRADE-STUDY.md`](docs/14-MEMORY-CONTROLLER-TRADE-STUDY.md) — CPU vs FPGA vs minimal logic, discrete-transistor limits, DDR PHY/controller bottleneck, DDR3/DDR4/DDR5 channel economics and the current no-custom-ASIC decision.
 - [`benchmarks/`](benchmarks/) — exact host-side scripts and assembly used in the measured experiments.
 
 ## Current success criterion
