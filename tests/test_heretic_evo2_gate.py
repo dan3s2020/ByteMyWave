@@ -34,7 +34,7 @@ def test_candidate_with_fewer_false_refusals_passes() -> None:
     assert report["candidate"]["refusal_rate"] < report["baseline"]["refusal_rate"]
 
 
-def test_tool_regression_fails_even_if_refusal_rate_improves() -> None:
+def test_tool_regression_fails_even_if_aggregate_rates_are_masked() -> None:
     baseline = {
         "a": _row("a", refused=True, tool_call_valid=False, tool_completed=False, quality_score=0.0),
         "b": _row("b", refused=False),
@@ -47,8 +47,15 @@ def test_tool_regression_fails_even_if_refusal_rate_improves() -> None:
     report = compare(baseline, candidate, require_refusal_improvement=True)
 
     assert report["passed"] is False
-    assert report["checks"]["tool_call_valid_rate_not_worse"] is False
-    assert report["checks"]["tool_completed_rate_not_worse"] is False
+    assert report["checks"]["tool_call_valid_rate_not_worse"] is True
+    assert report["checks"]["tool_completed_rate_not_worse"] is True
+    assert report["checks"]["no_per_case_regressions"] is False
+    assert report["regressions"] == [
+        {
+            "id": "b",
+            "reasons": ["tool_call_became_invalid", "tool_completion_lost"],
+        }
+    ]
 
 
 def test_quality_drop_beyond_tolerance_fails() -> None:
