@@ -138,6 +138,8 @@ def compare(
         if reasons:
             regressions.append({"id": result_id, "reasons": reasons})
 
+    checks["no_per_case_regressions"] = not regressions
+
     return {
         "passed": all(checks.values()),
         "checks": checks,
