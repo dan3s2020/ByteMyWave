@@ -1,0 +1,13 @@
+# Pinned upstream dependency for the Heretic/Evo2 orchestrator research track.
+# Keep this file in sync with the third_party/heretic gitlink.
+
+name = "heretic"
+upstream = "https://github.com/p-e-w/heretic.git"
+tag = "v1.4.0"
+commit = "6ea3b8d778d047b4b3b7c5b843e21c5bea98ee8d"
+license = "AGPL-3.0-or-later"
+release_zip_sha256 = "02dcaec06c513aa353d4323ca4140650291bb0f6661439fbb283f8bf3f5b9057"
+
+# Heretic is an offline model-research/preparation dependency. It is not part
+# of the Transit hot inference path and it does not modify Evo2 itself.
+execution_role = "offline_model_research"

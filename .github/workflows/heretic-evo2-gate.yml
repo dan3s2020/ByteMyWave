@@ -1,0 +1,50 @@
+name: Heretic Evo2 integration gate
+
+on:
+  push:
+    branches:
+      - research/heretic-evo2-orchestrator-2026-08-29
+    paths:
+      - ".gitmodules"
+      - "third_party/heretic"
+      - "integrations/heretic/**"
+      - "benchmarks/heretic-evo2/**"
+      - "tools/heretic_evo2_gate.py"
+      - "tests/test_heretic_evo2_gate.py"
+      - ".github/workflows/heretic-evo2-gate.yml"
+  pull_request:
+    paths:
+      - ".gitmodules"
+      - "third_party/heretic"
+      - "integrations/heretic/**"
+      - "benchmarks/heretic-evo2/**"
+      - "tools/heretic_evo2_gate.py"
+      - "tests/test_heretic_evo2_gate.py"
+      - ".github/workflows/heretic-evo2-gate.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout with pinned submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Verify Heretic pin
+        shell: bash
+        run: |
+          expected="6ea3b8d778d047b4b3b7c5b843e21c5bea98ee8d"
+          actual="$(git -C third_party/heretic rev-parse HEAD)"
+          test "$actual" = "$expected"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test runner
+        run: python -m pip install pytest
+
+      - name: Run integration-gate unit tests
+        run: python -m pytest -q tests/test_heretic_evo2_gate.py
