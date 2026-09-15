@@ -6,7 +6,7 @@ This experiment moves the RAM lookup-compute track from approximate vector codeb
 
 - Weight format: `Q4_K`, unchanged from GGUF/Ollama.
 - Activation format: `Q8_K`, matching llama.cpp's `GGML_TYPE_Q4_K` CPU dot path.
-- Main test tensor: `blk.0.ffn_gate.weight` from the local Qwen 3.5 4B Q4_K_M model (`2560 × 9216`, 12.656 MiB Q4_K).
+- Main test tensor: `blk.0.ffn_gate.weight` from the local Qwen 3.5 4B Q4_K_M model (`2560 × 9216` in GGUF ne-order; GEMV interpretation `9216 output rows × 2560 input columns`, 12.656 MiB Q4_K).
 - No extra model approximation is introduced. Correctness is measured against a scalar implementation of the same Q4_K × Q8_K arithmetic.
 
 ## Kernels in the standalone benchmark
@@ -25,6 +25,34 @@ The x8 kernels reuse each Q8_K activation fragment across eight output rows. The
 The exact packed-byte LUT tested earlier replaces only two low-bit products per lookup and loses badly to SIMD. V15 instead spends a small amount of RAM on a compute-friendly runtime layout and removes repeated metadata decode while preserving dense SIMD dot instructions.
 
 This is consistent with the broader Transit observation: memory helps when it materializes enough useful work per access or removes CPU bookkeeping; simply replacing a cheap multiply with a random lookup is not enough.
+
+## Real Qwen benchmark — 2026-09-16
+
+User-run benchmark on the real Ollama Qwen 3.5 4B Q4_K_M blob, tensor `blk.0.ffn_gate.weight`, 23,592,960 weights / 12.656 MiB Q4_K. Single thread, median, 15 iterations.
+
+All optimized paths were exactly equal to the scalar Q4_K × Q8_K operator for this run:
+
+- packed SIMD: relative-L2 `0`, cosine `1.000000000`, max abs `0`;
+- llama x8: relative-L2 `0`, cosine `1.000000000`, max abs `0`;
+- x8meta: relative-L2 `0`, cosine `1.000000000`, max abs `0`.
+
+Native build (`-march=native`, AVX2 + SSSE3 + F16C):
+
+- scalar exact: `2.279 ms`, `10.35 GOP/s` logical;
+- packed SIMD control: `1.254 ms`, `18.81 GOP/s`;
+- llama-x8 fused: `1.303 ms`, `18.11 GOP/s`, `0.963×` vs packed;
+- x8meta fused: `0.894 ms`, `26.39 GOP/s`, `1.403×` vs packed;
+- x8meta RAM overhead: `2.78%`.
+
+Ivy-compatible build (`-march=ivybridge -mno-avx2`, SSSE3 + F16C), executed on the same laptop as an ISA-target proxy rather than on the HP Gen8 Xeons themselves:
+
+- scalar exact: `3.320 ms`, `7.11 GOP/s` logical;
+- packed SIMD control: `1.331 ms`, `17.72 GOP/s`;
+- llama-x8 fused: `1.295 ms`, `18.22 GOP/s`, `1.028×` vs packed;
+- x8meta fused: `1.238 ms`, `19.07 GOP/s`, `1.076×` vs packed;
+- x8meta RAM overhead: `2.78%`.
+
+Interpretation: V15 establishes an exact, real-Qwen operator result with a measurable gain from the x8meta runtime representation. The `1.076×` Ivy figure is not yet a measurement on an E5-2680 v2; it is a binary compiled for Ivy Bridge and executed on the development laptop. The next decisive measurements are the same binary on a Gen8/Ivy Bridge server and then full llama.cpp integration / `llama-bench` decode.
 
 ## Development sanity benchmark
 
