@@ -48,3 +48,25 @@ final SSD simultaneous       5.787 GB/s
 ```
 
 Do not interpret SSD Q4-equivalent throughput as computation. Do not interpret these weight-path rates as end-to-end K3 token rates.
+
+## 2026-09-16 stock-laptop lookup-compute track
+
+A separate software experiment now records the V1→V8 progression from one arithmetic product per lookup to coded 32/64-operation block lookups, including a deliberately dispersed 256 MiB working-set control.
+
+Start here:
+
+- [`ram-lookup-compute/README.md`](ram-lookup-compute/README.md) — method and reproduction rules;
+- [`ram-lookup-compute/RAW-MEASUREMENTS-2026-09-16.md`](ram-lookup-compute/RAW-MEASUREMENTS-2026-09-16.md) — transcribed console measurements;
+- [`ram-lookup-compute/results-2026-09-16.csv`](ram-lookup-compute/results-2026-09-16.csv) — machine-readable exact result table;
+- [`../docs/16-STOCK-LAPTOP-RAM-LOOKUP-COMPUTE-2026-09-16.md`](../docs/16-STOCK-LAPTOP-RAM-LOOKUP-COMPUTE-2026-09-16.md) — full interpretation and caveats.
+
+Headline measured sequence:
+
+```text
+V5  4 MAC/lookup  : 256 MiB pressure path = 0.19× direct CPU
+V6 16 MAC/lookup  : 256 MiB pressure path = 0.59× direct CPU
+V7 32 MAC/lookup  : 256 MiB pressure path = 1.11× direct CPU
+V8 64 coded ops   : 256 MiB pressure path = 4.52× scalar branchless CPU
+```
+
+These are synthetic software lookup benchmarks, not physical DRAM/PIM operations and not end-to-end LLM token/s. V8 additionally uses a restricted 256-entry vector codebook and must not be described as 64 arbitrary Q4 weights losslessly encoded in one byte.
