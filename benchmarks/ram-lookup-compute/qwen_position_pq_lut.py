@@ -38,15 +38,22 @@ flat = np.asarray(
     dtype=np.float32
 ).reshape(-1)
 
-rows = int(t.shape[0])
-cols = int(t.shape[1])
+if len(t.shape) != 2:
+    raise RuntimeError(f"Expected 2-D tensor, got {tuple(int(v) for v in t.shape)}")
+
+# ReaderTensor.shape is GGML dimension order, not NumPy rows/cols.
+# ne[0] is the contiguous row length (GEMV input columns), ne[1] is rows.
+cols = int(t.shape[0])
+rows = int(t.shape[1])
 
 W = flat.reshape(rows, cols)
 
 rng = np.random.default_rng(SEED)
 
 print(f"Tensor              : {TENSOR}")
-print(f"Shape               : {rows:,} x {cols:,}")
+print(f"GGUF ne[0]          : {cols:,}")
+print(f"GGUF ne[1]          : {rows:,}")
+print(f"GEMV shape          : {rows:,} rows x {cols:,} cols")
 print(f"Weights             : {flat.size:,}")
 print(f"Original Q4_K       : {t.n_bytes/1024**2:.3f} MiB")
 print()
@@ -135,13 +142,11 @@ for G in GROUPS:
         f"{K}"
     )
 
-    # codes[row, subspace]
     codes = np.empty(
         (rows, subspaces),
         dtype=np.uint8
     )
 
-    # Stored representation = FP16.
     centers16 = np.empty(
         (subspaces, K, G),
         dtype=np.float16
@@ -203,13 +208,6 @@ for G in GROUPS:
         f"Training total      : "
         f"{train_end-train_start:.3f} s"
     )
-
-
-    # ========================================================
-    # MEASURE WEIGHT RECONSTRUCTION
-    #
-    # Use ACTUAL FP16 stored centers.
-    # ========================================================
 
     weight_sse = 0.0
     weight_energy = 0.0
@@ -294,14 +292,6 @@ for G in GROUPS:
         f"{weight_snr:.2f} dB"
     )
 
-
-    # ========================================================
-    # RUNTIME REPRESENTATION
-    # ========================================================
-
-    # Convert once for NumPy compute.
-    # Stored model remains FP16 centers.
-
     centers = centers16.astype(
         np.float32
     )
@@ -310,7 +300,6 @@ for G in GROUPS:
         subspaces
     )[None, :]
 
-
     def pq_lut_gemv(x):
 
         xb = x.reshape(
@@ -318,29 +307,12 @@ for G in GROUPS:
             G
         )
 
-        # table[subspace, centroid]
-        #
-        # Shape:
-        #
-        # [S,G] x [S,K,G]
-        # -> [S,K]
-        #
-        # Arithmetic:
-        #
-        # S*K*G
-        #
-        # = cols*K
-        # = constant for every G.
-
         table = np.einsum(
             "sg,skg->sk",
             xb,
             centers,
             optimize=True
         )
-
-        # For each matrix row and subspace:
-        # select its precomputed centroid dot-product.
 
         selected = table[
             sub_idx,
@@ -352,11 +324,6 @@ for G in GROUPS:
             axis=1,
             dtype=np.float32
         )
-
-
-    # ========================================================
-    # OUTPUT QUALITY
-    # ========================================================
 
     cosines = []
     rel_errors = []
@@ -434,11 +401,6 @@ for G in GROUPS:
         f"{worst_rel:.6f}"
     )
 
-
-    # ========================================================
-    # STORAGE
-    # ========================================================
-
     code_bytes = codes.nbytes
     center_bytes = centers16.nbytes
 
@@ -472,11 +434,6 @@ for G in GROUPS:
         f"Compression/Q4_K   : "
         f"{compression:.2f}x"
     )
-
-
-    # ========================================================
-    # COMPUTE ACCOUNTING
-    # ========================================================
 
     lut_build_macs = (
         subspaces *
@@ -520,11 +477,6 @@ for G in GROUPS:
         f"Dynamic LUT size    : "
         f"{table_bytes/1024:.2f} KiB"
     )
-
-
-    # ========================================================
-    # NUMPY PERFORMANCE
-    # ========================================================
 
     for x in bench_x[:3]:
         _ = pq_lut_gemv(x)
@@ -581,7 +533,6 @@ for G in GROUPS:
             speedup
         )
     )
-
 
 print()
 print("=" * 80)
