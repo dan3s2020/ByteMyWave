@@ -52,7 +52,21 @@ Ivy-compatible build (`-march=ivybridge -mno-avx2`, SSSE3 + F16C), executed on t
 - x8meta fused: `1.238 ms`, `19.07 GOP/s`, `1.076×` vs packed;
 - x8meta RAM overhead: `2.78%`.
 
-Interpretation: V15 establishes an exact, real-Qwen operator result with a measurable gain from the x8meta runtime representation. The `1.076×` Ivy figure is not yet a measurement on an E5-2680 v2; it is a binary compiled for Ivy Bridge and executed on the development laptop. The next decisive measurements are the same binary on a Gen8/Ivy Bridge server and then full llama.cpp integration / `llama-bench` decode.
+### Important baseline correction after V11
+
+A later geometry-correct V11 harness added a closer port of the current ggml Q4_K × Q8_K AVX2 arithmetic shape. On the same laptop and the same real `9216 × 2560` tensor it measured approximately `0.860–0.910 ms/GEMV` kernel-only, faster than V15's `packed SIMD control = 1.254 ms` and roughly comparable to / slightly faster than V15's `x8meta = 0.894 ms` in those separate runs.
+
+Therefore the earlier `1.403×` x8meta number is **only a win over V15's packed control**, not a demonstrated win over the best current ggml-style baseline. Do not cite V15 as a 40% improvement over llama.cpp.
+
+The next valid gate is an apples-to-apples same-harness comparison of:
+
+- current llama-style AVX2 baseline;
+- V15 x8meta;
+- same CPU affinity;
+- paired/interleaved timing;
+- hot-cache and cache-evicted streaming measurements.
+
+See `../V11-REAL-GEOMETRY-RESULTS-2026-09-16.md` for the newer baseline results.
 
 ## Development sanity benchmark
 
