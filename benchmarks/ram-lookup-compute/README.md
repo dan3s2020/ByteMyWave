@@ -10,7 +10,8 @@ The complete interpretation, exact numbers and caveats are in:
 - [`REAL-QWEN-Q4K-RESULTS-2026-09-16.md`](REAL-QWEN-Q4K-RESULTS-2026-09-16.md) — first real-Qwen codebook experiments;
 - [`../../docs/17-REAL-QWEN-Q4K-EXACT-LUT-2026-09-16.md`](../../docs/17-REAL-QWEN-Q4K-EXACT-LUT-2026-09-16.md) — position-specific PQ plus lossless/original-Q4_K exact-LUT continuation;
 - [`REAL-QWEN-Q4K-EXACT-LUT-RESULTS-2026-09-16.md`](REAL-QWEN-Q4K-EXACT-LUT-RESULTS-2026-09-16.md) — compact raw measured output and hardware inventory;
-- [`results-2026-09-16.csv`](results-2026-09-16.csv) — V1-V8 machine-readable result table.
+- [`results-2026-09-16.csv`](results-2026-09-16.csv) — V1-V8 machine-readable result table;
+- [`V29-NUMA-PLAN-AND-LUT-CODEBOOK-PLACEMENT-2026-09-16.md`](V29-NUMA-PLAN-AND-LUT-CODEBOOK-PLACEMENT-2026-09-16.md) — next physical-server gate: V27 META per NUMA socket, plus explicit retained roles for LUTs/codebooks.
 
 ## What the benchmark does
 
@@ -217,3 +218,21 @@ A run is valid only if:
 6. coded-vector results are not described as arbitrary-vector results;
 7. synthetic tok/s is not presented as real model token/s;
 8. the C# exact-LUT result is not presented as superiority over llama.cpp before the native `Q4_K x Q8_K` comparison is executed.
+
+## Current next gate after V28
+
+The V28 exact hot-dictionary experiment reported zero selected exact patterns at every tested threshold (`R2` through `R64`) and the fused path lost to same-run META. That mechanism is therefore closed unless a new source of reuse is demonstrated.
+
+The next benchmark is V29 on the real dual-socket server:
+
+```text
+V27 META exact kernel
++ NUMA-local weight allocation
++ one persistent worker pool per socket
++ disjoint output-row shards
++ duplicated activation
++ local-vs-remote controls
++ exact correctness
+```
+
+LUT/codebook research is **not abandoned**. The linked V29 plan keeps it as a separate lever for regimes with real amortization/locality, near-memory SRAM/BRAM, numerically safe speculative expert prefetch, network/state compression, and small repeated decode/control transforms.
