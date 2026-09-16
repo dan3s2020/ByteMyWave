@@ -1,10 +1,18 @@
 # TRANSIT V38 ROWMADD
 
+> **REPRODUCIBILITY RULE:** the authoritative implementation is the exact benchmark artifact under [`EXACT-PACKAGE/`](EXACT-PACKAGE/), not a reconstruction from this design document. Run `EXACT-PACKAGE/RESTORE_EXACT_V38.ps1`; it must reproduce package SHA256 `4b6a717f5d30725246088a07783c754100183fe59b46c10023cf79b0709b8088`, source SHA256 `61a1d4aa0364a1f3d8daa0b9d704b4b7339b25f97a86771fc4649d538714bf45`, and runner SHA256 `c203bbb4d010528b17851614d78c9a353a905a0d62abc9660f1ca3b0b8ee2a07`. **Do not call reconstructed code “V38 exact.”**
+
 V38 starts from the real V37 ROW4LANE champion and preserves V27 META.
 
 Pinned input:
 - model blob: `C:\Users\DSV\.ollama\models\blobs\sha256-81fb60c7daa80fc1123380b98970b320ae233409f0f71a72ed7b9b0d62f40490`
 - tensor: `blk.0.ffn_gate.weight`
+
+## Exact source / package
+
+The complete original `TRANSIT_V38_ROWMADD.zip` that generated the recorded benchmark is preserved losslessly in `EXACT-PACKAGE/` as six Base64 transport parts because the repository connector writes UTF-8 text. `RESTORE_EXACT_V38.ps1` concatenates those exact bytes, verifies the ZIP SHA256, extracts the original files, and verifies the exact `.cpp`, runner, and manifest hashes. The original runner is also exposed directly as `EXACT-SOURCE/RUN.ps1` for inspection.
+
+This exact-package artifact supersedes any earlier incomplete `EXACT-SOURCE` fragment or any source reconstructed from README/design notes.
 
 ## Why V38 exists
 
