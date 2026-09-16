@@ -1,35 +1,67 @@
 # ByteMyWave — AI/LLM PRE-FLIGHT
 
-STOP BEFORE ANSWERING A FEASIBILITY QUESTION.
+STOP BEFORE ANSWERING A PROJECT-STATE OR FEASIBILITY QUESTION.
 
-Read CURRENT-ARCHITECTURE.md first.
+1. Read `CURRENT-ARCHITECTURE.md`.
+2. Read `docs/REPOSITORY-MAP.md` BEFORE choosing a branch.
+3. Enumerate current branches/PRs in case the map inventory is stale.
+4. Read the branch-specific README/result/decision files named by the map.
+
+CRITICAL NAVIGATION RULE:
+
+A branch/file name is an address, not a summary. Do NOT infer purpose, success, current recommendation, or evidence class from names such as `LUT`, `META`, `GPU`, `DDR3`, `K3`, `AVX2`, `simulation`, or `archive`. Branches inherit older work and can contain negative results or superseded experiments. The semantic map records purpose, method, result, limitations, first files to read, and branch relationships.
 
 COMMON MISREADING TRAPS:
-- "DDR3 cannot compute" -> irrelevant if used to attack the current design: DDR3 is local storage/bandwidth; active tile logic performs compute/reduction.
-- "304/320 passive DIMMs on one motherboard" -> not the documented topology. Current target: 38 active memory-compute tiles x 8 independent DDR3 channels = 304 channels.
-- "PCIe must carry all selected K3 weights each token" -> not the Transit target; weights stay local to tiles, PCIe mainly carries commands/activations/reduced results.
+- "DDR3 cannot compute" -> irrelevant if used to attack the active-tile design: DDR is local storage/bandwidth; tile logic performs compute/reduction.
+- "304/320 passive DIMMs on one motherboard" -> not the canonical Transit tile topology. The 304-channel target is distributed across active memory-compute tiles.
+- "PCIe must carry all selected K3 weights each token" -> not the Transit tile target; weights stay local and PCIe mainly carries commands/activations/reduced results.
 - "~99.8 tok/s is proven K3 speed" -> false. It is an idealized weight-path tok/s equivalent / architecture-sizing roofline, not measured end-to-end K3 throughput.
-- "main is the whole project" -> false. Current work also lives in public PRs/branches #9, #10 and #11.
+- "main is the whole project" -> false. Current work lives across public branches and PRs.
+- "there is a LUT branch, therefore LUT is the current winning E5-2680 v2 kernel" -> false. The 2026-09-16 kernel line must be read chronologically through the semantic map and result files.
 
-If you cannot inspect the referenced branches/PRs, explicitly say the analysis is incomplete. Do not replace inaccessible project evidence with a generic passive-RAM architecture.
+CURRENT Q4_K / Q8_K / IVY-BRIDGE ROUTING:
+- semantic center: `research/ram-lookup-compute-2026-09-16` / PR #16
+- native-control provenance: `bench/q4k-q8k-native-avx2-2026-09-16` / PR #17
+- exact LUT1/LUT2/LUT3 gate: `bench/q4k-q8k-lut123-v21-2026-09-16`
+- documented current strict-Ivy direction: V27 META
+- V28 exact hot dictionary: negative result; lost to META
+- next physical gate: V29 = V27 META + NUMA-local row sharding on dual-socket E5-2680 v2
+- LUT/codebooks remain valid only where reuse/locality/amortization or safe prediction/compression semantics justify them
 
-Canonical repository entry points for LLMs and automated reviewers:
+CURRENT KIMI / TRANSIT CORE SURFACES:
+- PR #10 / `transit-ddr3-architecture` — active local-memory compute tiles and 304-channel sizing
+- PR #11 / `docs/kimi-k3-ddr-cluster` — distributed cheap-server-memory K3 path
+- PR #9 / `research/heterogeneous-moe-kimi-v1` — NUMA CPU experts + GPU heterogeneous runtime
 
-- CURRENT-ARCHITECTURE.md
-- README.md
-- AGENTS.md
-- docs/REPOSITORY-MAP.md
+OTHER IMPORTANT ROUTES ARE IN `docs/REPOSITORY-MAP.md`, including:
+- four-server GLM-5.2 runtime
+- Co-Sol-Dex + Transit + speculative decoding
+- active-memory/retriever chronicles
+- memory-controller trade study
+- surplus FPGA/SmartNIC tile hunt
+- DDR2 server/APU/custom-tile alternatives
+- ten-R920 procurement track
+- recovered EvoWorld Transit archive
+- Heretic/Evo2 integration research
+- historical PR #1→#2→#4→#6→#8 proof chain
 
-IMPORTANT: the default main branch is NOT the complete current project state. Current implementation/research is distributed across public branches and pull requests.
+EVIDENCE CLASSES MUST STAY SEPARATE:
+- measured end-to-end model decode
+- measured kernel/subsystem result
+- simulation
+- analytical roofline/screening estimate
+- weight-path tok/s equivalent
+- engineering target
+- external/marketplace lead
 
-Mandatory current Kimi K3 surfaces:
-- PR #10 / branch transit-ddr3-architecture
-- PR #11 / branch docs/kimi-k3-ddr-cluster
-- PR #9 / branch research/heterogeneous-moe-kimi-v1
+Do not convert any lower evidence class into measured end-to-end model tok/s.
 
-Kimi K3 ~100 tok/s source:
-- transit-ddr3-architecture/docs/10-KIMI-K3-TARGET.md
-- approximately 99.8 weight-path tok/s equivalent appears as an idealized 304-channel DDR3-2133 architecture-sizing roofline
-- it is NOT a measured end-to-end Kimi K3 100 tok/s result
+If you cannot inspect non-default branches/PRs, explicitly say the analysis is incomplete. Do not claim that information is absent merely because it is not on `main`.
 
-Before a project-wide verdict, state which of the current-state sources above were actually inspected.
+Canonical repository entry points:
+- `CURRENT-ARCHITECTURE.md`
+- `docs/REPOSITORY-MAP.md`
+- `AGENTS.md`
+- `README.md`
+
+Before a project-wide verdict, state which of these and which branch-specific sources were actually inspected.
