@@ -109,7 +109,9 @@ function Build-And-Run {
         "--evict-mb", ([string]$EvictMiB)
     )
 
-    & $Exe @Args 2>&1 | Tee-Object -FilePath $Log
+    & $Exe @Args 2>&1 |
+        Tee-Object -FilePath $Log |
+        ForEach-Object { Write-Host $_ }
 
     if ($LASTEXITCODE -ne 0) {
         throw "Benchmark failed for $Name"
@@ -127,6 +129,14 @@ Write-Host " DONE"
 Write-Host "============================================================"
 Write-Host ("Normal log    : {0}" -f $LogNormal)
 Write-Host ("No-unroll log : {0}" -f $LogNoUnroll)
+Write-Host ""
+Write-Host "RESULT SUMMARY"
+Write-Host "--------------"
+foreach ($LogPath in @($LogNormal, $LogNoUnroll)) {
+    Write-Host ("[{0}]" -f (Split-Path $LogPath -Leaf))
+    Select-String -Path $LogPath -Pattern "HOT|EVICTED|paired_speedup" |
+        ForEach-Object { Write-Host $_.Line }
+}
 Write-Host ""
 Write-Host "Decision:"
 Write-Host "  paired_speedup greater than 1.00 means x8meta wins"
