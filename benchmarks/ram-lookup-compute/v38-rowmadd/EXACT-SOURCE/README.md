@@ -8,22 +8,55 @@ Pinned input:
 
 ## Why V38 exists
 
-V37 maps four output rows directly into the four int32 SIMD lanes and reached the real laptop record: HOT 1.46251x vs V27 and ROTATE 1.41463x vs V27, exact diff=0.
+V37 maps four output rows directly into the four int32 SIMD lanes and reached the real laptop record:
+- HOT: 1.46251x vs V27
+- ROTATE: 1.41463x vs V27
+- exact `diff=0`
 
-Inside ROW4LANE, each 32-weight group still used `PMADDWD(sum16, ones)` followed by `PMULLD(dot, scale)`. V38 uses distributivity and the proven int16 bounds to compute `PMADDWD(sum16, repeated_scale16)` directly, preserving the exact result while removing the per-group PMULLD scale stage.
+Inside ROW4LANE, each 32-weight group still used:
+
+```
+PMADDWD(sum16, ones) -> int32 dot
+PMULLD(dot, scale)
+```
+
+V38 exploits distributivity and the proven int16 bounds:
+
+```
+PMADDWD(sum16, repeated_scale16)
+```
+
+This computes the identical scaled dot directly and removes the per-group PMULLD stage.
 
 ## New candidates
 
-- `V38_ROW4MADD`: direct PMADDWD scaling. Scale bytes remain compact and are expanded at runtime with `PSHUFB`. Same static bytes as V37 ROW4LANE.
-- `V38_ROW4MADD_I2`: same arithmetic with two independent accumulation chains to expose ILP around PMADDUBSW latency.
-- `V38_ROW4MADD_PRE`: RAM-for-instructions control; pre-expands scale vectors offline at +192 B/tile.
+- `V38_ROW4MADD`: direct PMADDWD scaling. Scale bytes stay compact and are expanded at runtime using SSSE3/AVX `PSHUFB`. Same static bytes as V37 ROW4LANE.
+- `V38_ROW4MADD_I2`: same arithmetic, but splits the 8 c-steps into two independent accumulation chains to expose more ILP around PMADDUBSW latency.
+- `V38_ROW4MADD_PRE`: RAM-for-instructions control. Pre-expands scale vectors offline; +192 bytes/tile versus ROW4LANE.
 
-Min metadata is also permuted pair-major without increasing min byte count.
+Min metadata is also permuted pair-major without increasing its byte count, removing the older convert+unpack sequence.
 
 ## Promotion gate
 
-A V38 path advances only if `diff=0`, paired median >1, p10 >1, win-rate >=80%, and it beats stable V37 ROW4LANE in the same run. The runner prints explicit `SUCCESS +X%` or `FAIL TO ADVANCE` for HOT and ROTATE.
+A V38 path advances only if:
+- exactness: `diff=0`
+- paired median speedup > 1
+- p10 > 1
+- win rate >= 80%
+- and it beats the stable V37 ROW4LANE champion in the same run.
 
-ISA contract remains strict Ivy: `-march=ivybridge -mssse3 -mavx -mno-avx2 -mno-fma`.
+The PowerShell runner prints an explicit final `SUCCESS +X%` or `FAIL TO ADVANCE` for HOT and ROTATE.
 
-Development sanity is only a gate. Pinned real laptop and physical E5-2680 v2 results decide promotion/production.
+## ISA contract
+
+```
+-march=ivybridge
+-mssse3
+-mavx
+-mno-avx2
+-mno-fma
+```
+
+The generated assembly was checked: the V38 ROW4MADD hot function contains `VPSHUFB` + `VPMADDWD` for scale handling and does not use `VPMULLD` for that stage.
+
+Development synthetic sanity is only a gate. The pinned real laptop run and then E5-2680 v2 measurements decide promotion/production.
