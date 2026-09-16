@@ -197,6 +197,7 @@ Technically very strong: PCIe Gen3 x8 + fast 64-bit DDR3 + Virtex-7 + growing co
 - around **$59.99 used / Best Offer** in a listing examined.
 
 ### Why it is unusual and interesting
+
 Unlike Storey Peak, this card can potentially accept removable DDR3 SODIMMs. Therefore a single tile could offer far greater capacity.
 
 Potential theoretical configuration:
@@ -396,6 +397,7 @@ The switch may be implemented as multiple smaller switch cards/backplanes. Casca
   - remaining lanes available/unallocated depending on implementation
 
 ### Why it is architecturally ideal
+
 It is almost exactly the fan-out we want for Storey Peak: real x8 downstream links rather than x1 mining-riser links.
 
 ### Problem
@@ -595,6 +597,7 @@ A 100-card array should be treated as a research accelerator fabric, not assumed
 ---
 
 # Current ranking
+
 ## Ultra-cheap programmable tile
 
 **#1 Storey Peak X930613-001**
