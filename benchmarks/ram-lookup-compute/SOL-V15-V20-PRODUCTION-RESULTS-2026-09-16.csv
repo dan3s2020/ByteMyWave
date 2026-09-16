@@ -1,0 +1,38 @@
+version,mode,threads,layout,config,ms_per_gemv,logical_gops,effective_weight_gbps,runtime_overhead_pct,rel_l2,cosine,max_abs,notes
+V15,native,1,packed,packed SIMD control,1.254,18.81,,,0,1.0,0,real Qwen tensor
+V15,native,1,x8,llama-x8 fused,1.303,18.11,,,0,1.0,0,real Qwen tensor
+V15,native,1,x8meta,x8meta fused,0.894,26.39,,2.78,0,1.0,0,real Qwen tensor
+V15,ivy-proxy,1,packed,packed SIMD control,1.331,17.72,,,0,1.0,0,compiled ivybridge and executed on laptop
+V15,ivy-proxy,1,x8,llama-x8 fused,1.295,18.22,,,0,1.0,0,compiled ivybridge and executed on laptop
+V15,ivy-proxy,1,x8meta,x8meta fused,1.238,19.07,,2.78,0,1.0,0,compiled ivybridge and executed on laptop
+V16,hot,1,x8meta,V15 in-binary control,0.738,31.96,,5.556,2.139e-07,1.0,4.172325134e-07,same V16 executable control
+V16,hot,1,x8,V16 x8 PF0,0.630,37.43,,5.556,2.139e-07,1.0,4.172325134e-07,
+V16,hot,1,x8,V16 x8 PF4,0.621,37.97,,5.556,2.139e-07,1.0,4.172325134e-07,
+V16,hot,1,x16,V16 x16 PF0,0.602,39.20,,5.556,2.139e-07,1.0,4.172325134e-07,
+V16,hot,1,x16,V16 x16 PF4,0.594,39.70,,5.556,2.139e-07,1.0,4.172325134e-07,
+V16,hot,1,x16-vnni,V16 VNNI PF0,0.520,45.36,,5.556,2.139e-07,1.0,4.172325134e-07,best V16 single
+V16,hot,2,x16,V16 persistent PF2,0.311,75.77,,5.556,,,,persistent work simulation
+V16,hot,4,x16,V16 persistent PF2,0.160,147.30,,5.556,,,,persistent work simulation
+V16,hot,8,x16,V16 persistent PF2,0.109,215.93,,5.556,,,,persistent work simulation
+V17,hot,1,x16-vnni,V17 x16 VNNI PF4,0.514,45.94,,5.556,2.139e-07,1.0,4.172325134e-07,best V17 single
+V17,persistent,1,x16-vnni,PF0,0.545,43.25,,5.556,,,,dispatch included
+V17,persistent,2,x16-vnni,PF4,0.243,97.13,,5.556,,,,dispatch included
+V17,persistent,4,x16-vnni,PF0,0.151,156.66,,5.556,,,,dispatch included
+V17,persistent,8,x16-vnni,PF4,0.124,189.65,,5.556,,,,dispatch included
+V18,hot,11,x16-vnni,dynamic-physical PF0 CH4,0.064,370.96,,5.556,,,,hot-cache result; not DRAM claim
+V19,streaming,1,v19,unpinned PF4 CH16,0.779,30.3,18.0,5.556,0,1.0,0,521 MiB working set
+V19,streaming,2,v19,physical PF4 CH32,0.431,54.8,32.5,5.556,0,1.0,0,521 MiB working set
+V19,streaming,4,v19,physical PF4 CH8,0.323,73.07,43.38,5.556,0,1.0,0,best V19; 521 MiB working set
+V20,streaming,1,ZERO,best-so-far,0.759,,17.5,0,0,1.0,0,518.91 MiB stream
+V20,streaming,2,ZERO,best-so-far,0.405,,32.8,0,0,1.0,0,518.91 MiB stream
+V20,streaming,4,ZERO,best-so-far,0.296,,44.8,0,0,1.0,0,518.91 MiB stream
+V20,streaming,8,ZERO,best-so-far,0.270,,49.2,0,0,1.0,0,518.91 MiB stream
+V20,streaming,12,ZERO,best-so-far,0.266,,49.9,0,0,1.0,0,518.91 MiB stream
+V20,streaming,16,ZERO,best-so-far,0.244,,54.3,0,0,1.0,0,518.91 MiB stream
+V20,streaming,1,COMPACT,best-so-far,0.769,,17.7,2.78,0,1.0,0,520.31 MiB stream
+V20,streaming,2,COMPACT,best-so-far,0.428,,31.8,2.78,0,1.0,0,520.31 MiB stream
+V20,streaming,4,COMPACT,best-so-far,0.293,,46.6,2.78,0,1.0,0,520.31 MiB stream
+V20,streaming,8,COMPACT,best-so-far,0.284,,48.1,2.78,0,1.0,0,520.31 MiB stream
+V20,streaming,10,COMPACT,best-so-far,0.274,,49.8,2.78,0,1.0,0,520.31 MiB stream
+V20,streaming,12,COMPACT,physical static PF0 T0 CH4,0.228,103.71,59.95,2.78,0,1.0,0,best V20; 520.31 MiB stream
+V20,streaming,16,COMPACT,best-so-far,0.228,,60.0,2.78,0,1.0,0,520.31 MiB stream
