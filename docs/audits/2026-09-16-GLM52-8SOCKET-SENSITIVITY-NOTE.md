@@ -55,6 +55,23 @@ results become:
 | central | 11.28 tok/s | 8.16 tok/s |
 | strong | 15.86 tok/s | 12.02 tok/s |
 
+## Hypothetical impact of a future 1.11× GLM expert kernel
+
+The current measured x8meta result is Q4_K×Q8_K and **does not directly apply** to the selected GLM Q3 build, whose routed experts are Q2_K/Q3_K. However, this sanity check asks a useful architectural question:
+
+> If a future exact Q2_K/Q3_K row-interleaved/predecoded kernel reproduced the same 1.11× local CPU-expert speedup, how much would the uncalibrated 8-socket sensitivity model move?
+
+Mechanically multiplying only each scenario's assumed CPU expert Gweights/s by `1.11` gives:
+
+| 8-socket scenario | Before hypothetical expert kernel | After 1.11× CPU-expert rate | Full-model delta |
+|---|---:|---:|---:|
+| pessimistic | 3.15 tok/s | 3.38 tok/s | +7.3% |
+| conservative | 5.09 tok/s | 5.44 tok/s | +6.9% |
+| central | 8.16 tok/s | 8.69 tok/s | +6.6% |
+| strong | 12.02 tok/s | 12.71 tok/s | +5.7% |
+
+This is an **Amdahl-effect illustration**, not a prediction. It deliberately leaves GPU hit rate, always-on work, network latency and MTP unchanged. It shows why even a real +11% expert-kernel improvement should not be reported as +11% model tok/s.
+
 ## Interpretation boundary
 
 These are **not expected HP DL360p tok/s**.
@@ -65,6 +82,6 @@ This counterfactual proves only one point:
 
 > the 16-socket GLM sensitivity numbers contain a material benefit from two-socket-per-expert same-layer parallelism and must be reduced/recalibrated for an 8-socket cluster.
 
-It also does not include the Q4_K x8meta multiplier. The public GLM Q3_K_M layout audited by the source branch uses Q2_K/Q3_K routed experts, so the current Q4_K×Q8_K kernel is not directly applicable.
+It also does not include the Q4_K x8meta multiplier as a current implementation result. The public GLM Q3_K_M layout audited by the source branch uses Q2_K/Q3_K routed experts, so the current Q4_K×Q8_K kernel is not directly applicable.
 
 The next meaningful GLM CPU measurement on the HP hardware is one real Q2_K/Q3_K expert in NUMA-local memory, reported as Gweights/s per socket, followed by a one-socket-per-expert eight-socket critical-path calibration.
