@@ -4,7 +4,7 @@
 >
 > The canonical detailed semantic index is [`docs/REPOSITORY-MAP.md`](docs/REPOSITORY-MAP.md). `AGENTS.md` already requires agents to read `CURRENT-ARCHITECTURE.md` and the detailed map before making project-wide claims. This root file exists so a human or agent landing on the repository can see the whole territory immediately instead of choosing work from branch names.
 
-_Last synchronized with branch inventory: 2026-09-16 — 24/24 current branches represented._
+_Last synchronized with branch inventory: 2026-09-16 — 26/26 current branches represented._
 
 ## How to use this map
 
@@ -18,7 +18,7 @@ For any question, use this sequence:
 
 ---
 
-## 24/24 branch routing board
+## 26/26 branch routing board
 
 | Branch | What it is actually for | Method / mechanism | Current result / status | Read next |
 |---|---|---|---|---|
@@ -26,7 +26,9 @@ For any question, use this sequence:
 | `transit-ddr3-architecture` | Main active memory-compute Transit architecture | PCIe fan-out → local DDR channels → local low-bit compute/reduction; weights stay local | Exact bitplane math + host/reference/RTL evidence; ~99.8 tok/s is a **weight-path roofline**, not measured K3 decode | `docs/10-KIMI-K3-TARGET.md`, `11-DDR3-TILE-ARCHITECTURE.md`, `14-CURRENT-SOLUTION.md` |
 | `docs/kimi-k3-ddr-cluster` | Distributed Kimi K3 on cheap server memory | Full-model sharding + layer/expert parallelism + network/runtime/procurement model | Architecture/procurement research; throughput still requires physical-path measurement | `docs/07-KIMI-K3-DISTRIBUTED-RUNTIME.md` through `11-RESEARCH-LOG-2026-08-16.md` |
 | `research/heterogeneous-moe-kimi-v1` | NUMA CPU routed experts + GPU fixed/hot path | NUMA-local expert execution, GPU resident path, mixed quantization, expert sharding | Analytical/simulation + benchmark framework; not final physical K3 tok/s | `experiments/phase6-heterogeneous-kimi-runtime/` |
-| `research/ram-lookup-compute-2026-09-16` | Semantic center of Q4_K×Q8_K/LUT/codebook/META/NUMA research | Synthetic LUTs → real codebooks → exact LUT → native controls → metadata repacks → strict-Ivy → NUMA | **V27 META** strongest strict-Ivy same-harness direction; V28 dictionary negative; V29 NUMA is next physical gate | `benchmarks/ram-lookup-compute/README.md`, `V29-NUMA-PLAN-AND-LUT-CODEBOOK-PLACEMENT-2026-09-16.md` |
+| `research/ram-lookup-compute-2026-09-16` | Semantic center of Q4_K×Q8_K/LUT/codebook/META/NUMA research | Synthetic LUTs → real codebooks → exact LUT → native controls → metadata repacks → strict-Ivy → NUMA | **V27 META** strongest strict-Ivy baseline; V28 dictionary negative; V29 NUMA planned; later V30/V31 branches extend this line | `benchmarks/ram-lookup-compute/README.md`, `V29-NUMA-PLAN-AND-LUT-CODEBOOK-PLACEMENT-2026-09-16.md` |
+| `bench/v30-ramforge-2026-09-16` | First exact post-V27 space-for-time layout sweep | X8F metadata/FP32 predecode, PACK8/COL8, SUM4, exact base+residual, VEC4/VEC8, META-Atlas | Real pinned Qwen tensor: X8F beat same-run V27 by **1.15339x at 12T**, PACK8 1.12015x; SUM4/BR negative; VEC8 showed >2x batch reuse in some thread configs | `benchmarks/ram-lookup-compute/v30-ramforge/README.md` |
+| `bench/v31-fusionforge-2026-09-16` | Follow-up that dissects and extends the V30 X8F win instead of adding another random LUT | Fused-scale accumulation; row-block 2/4/8/16 autotune; prefetch sweep; EXP8 and SCALED16 RAM-heavy exact layouts; physical-core enumeration; HOT vs COLD_EVICT controls; VEC2/4/8/16 | Runnable exact benchmark prepared; development 9216×2560 sanity is diff=0 and shows FSA promise, but pinned i5/E5 measurements are the authority | `benchmarks/ram-lookup-compute/v31-fusionforge/README.md`, `RESEARCH_NOTES.md` |
 | `bench/q4k-q8k-native-avx2-2026-09-16` | Native exact CPU control/provenance for LUT claims | Real Qwen geometry, native 4-row kernel, beyond-LLC paired runs | AVX2 control improvements measured on i5-12500H; not directly portable to E5-2680 v2 | `docs/18-NATIVE-Q4K-Q8K-AVX2-2026-09-16.md`, `19-CROSS-BRANCH-NATIVE-KERNEL-AUDIT-2026-09-16.md` |
 | `bench/q4k-q8k-lut123-v21-2026-09-16` | Exact LUT1/LUT2/LUT3 experiment | Lossless Q4_K repack + 1/2/3-product lookup tables | Correctness proven in harness; lookup candidates slower than arithmetic controls on audit machine; real Ivy server remains authority | `benchmarks/ram-lookup-compute/q4k-q8k-lut123-v21/README.md` |
 | `research/glm52-4x2-optimized-runtime-2026-08-18` | Four-server GLM-5.2 runtime plan | llama.cpp/GGUF + expert scheduler + NUMA + GPU cache + CPU fallback + MTP/prefetch | Practical architecture/targets; exact purchased four-server setup not yet fully measured | `docs/18-GLM52-4X2-OPTIMIZATION-EVIDENCE-2026-08-18.md` through `21-...SIMULATION-CORRECTION...md` |
@@ -52,7 +54,7 @@ For any question, use this sequence:
 ## Topic shortcuts
 
 - **Kimi K3 / 304 channels / ~100 tok/s:** start at `transit-ddr3-architecture`, then compare `docs/kimi-k3-ddr-cluster` and `research/heterogeneous-moe-kimi-v1`.
-- **Q4_K / Q8_K / LUT / codebook / META / V27 / V29 / Ivy Bridge:** start at `research/ram-lookup-compute-2026-09-16`; use the two benchmark branches only for exact mechanism provenance.
+- **Q4_K / Q8_K / LUT / codebook / META / V27+:** start at `research/ram-lookup-compute-2026-09-16`, then follow `bench/v30-ramforge-2026-09-16` → `bench/v31-fusionforge-2026-09-16` for the measured post-V27 evolution; use the older benchmark branches for mechanism provenance.
 - **Four purchased servers / GLM-5.2:** start at `research/glm52-4x2-optimized-runtime-2026-08-18`; do not substitute assumptions from the ten-R920 branch.
 - **FPGA/DDR tile procurement/fan-out:** use `agent/transit-memory-controller-trade-study` → `research/transit-surplus-full-bom-2026-08-17` → `hardware/transit-ddr2-tile-reva` as needed.
 - **Agent context/memory:** `agent/transit-active-memory-chronicles` + `research/transit-cosoldex-dspark-2026-09-09`; do not confuse this with model-weight memory compute.
