@@ -1,0 +1,14 @@
+TRANSIT V38 ROWMADD
+Package date: 2026-09-17
+Pinned model: C:\Users\DSV\.ollama\models\blobs\sha256-81fb60c7daa80fc1123380b98970b320ae233409f0f71a72ed7b9b0d62f40490
+Pinned tensor: blk.0.ffn_gate.weight
+Previous stable champion: V37_ROW4LANE
+ISA: Ivy Bridge / SSSE3 / SSE4.1 / AVX; no AVX2/FMA/VNNI required
+Promotion: exact diff=0 AND paired median>1 AND p10>1 AND win_rate>=0.80 AND beat V37 in same run
+Final console verdict: SUCCESS/FAIL with percentages vs V27 and V37
+
+Files:
+README.md  SHA256=9687a674f5efb5f8d877f3b6130e53f2199cf409c60e4f95a661a8080d4b36e0  bytes=1988
+RESEARCH_NOTES.md  SHA256=23dc4a7d0d9d79570c82c99d8b29c319873184c16797ded0e3773a68e919c235  bytes=623
+RUN.ps1  SHA256=c203bbb4d010528b17851614d78c9a353a905a0d62abc9660f1ca3b0b8ee2a07  bytes=12935
+v38_rowmadd.cpp  SHA256=61a1d4aa0364a1f3d8daa0b9d704b4b7339b25f97a86771fc4649d538714bf45  bytes=131311
